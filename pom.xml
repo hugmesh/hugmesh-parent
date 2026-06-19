@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Spring Boot 3.5.5 — the org baseline (matches snapdragon-admin-bff-api /
+       snapdragon-federation-api: proven WebFlux + Casdoor reactive JWT resource
+       server + GraalVM native on Java 21). -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>systems.snapdragon</groupId>
+  <artifactId>snapdragon-parent</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+  <name>snapdragon-parent</name>
+  <description>Snapdragon ecosystem metapom: consolidates the Spring Boot 3.5.5 / Java 21
+    reactive BFF baseline (WebFlux + Casdoor OAuth2 resource server + R2DBC/Liquibase +
+    SpringDoc), shared dependencyManagement, pluginManagement, and GitLab Maven publishing.</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- Shared, snapdragon-pinned versions. -->
+    <snapdragon-commons.version>1.0.0</snapdragon-commons.version>
+    <springdoc.version>2.7.0</springdoc.version>
+    <resilience4j.version>2.2.0</resilience4j.version>
+    <aws.sdk.version>2.28.3</aws.sdk.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- The snapdragon-commons shareable security/config/web library. Children
+           add it as a plain compile dependency without a <version> (managed here). -->
+      <dependency>
+        <groupId>systems.snapdragon</groupId>
+        <artifactId>snapdragon-commons</artifactId>
+        <version>${snapdragon-commons.version}</version>
+      </dependency>
+
+      <!-- AWS SDK v2 BOM — federation-api uses the synchronous S3Client; managed
+           here so children that need S3 inherit the version. -->
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws.sdk.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Resilience4j — circuit breakers on flaky write paths (federation override
+           apply/clear, admin effectors). Pinned to the Boot 3.5.x-compatible 2.2.0. -->
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-spring-boot3</artifactId>
+        <version>${resilience4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-reactor</artifactId>
+        <version>${resilience4j.version}</version>
+      </dependency>
+
+      <!-- SpringDoc OpenAPI (WebFlux UI) — pinned to 2.7.0 for the Boot 3.5.x
+           baseline; managed so children declare it without a version. -->
+      <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+        <version>${springdoc.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <!-- COMMON DIRECT DEPENDENCIES — every reactive BFF in the org declares these,
+       so they are inherited rather than repeated. Repo-specific deps (kafka, sshj,
+       cassandra, icu4j, webauthn, s3, …) stay in the child poms. -->
+  <dependencies>
+    <!-- Core reactive stack. -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webflux</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-security</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-oauth2-resource-server</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-validation</artifactId></dependency>
+
+    <!-- Data access: R2DBC for runtime reads/writes; Liquibase (over JDBC) owns
+         schema migrations. -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-r2dbc</artifactId></dependency>
+    <dependency><groupId>org.postgresql</groupId><artifactId>r2dbc-postgresql</artifactId><scope>runtime</scope></dependency>
+    <dependency><groupId>org.liquibase</groupId><artifactId>liquibase-core</artifactId></dependency>
+    <dependency><groupId>org.springframework</groupId><artifactId>spring-jdbc</artifactId></dependency>
+    <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+
+    <!-- OpenAPI 3 spec + Swagger UI (WebFlux variant). -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+    </dependency>
+
+    <!-- test -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>io.projectreactor</groupId><artifactId>reactor-test</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-test</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>io.r2dbc</groupId><artifactId>r2dbc-h2</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
+  </dependencies>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+        </plugin>
+        <!-- Byte Buddy (via Mockito) only officially supports up to JDK 23; this
+             flag lets it run on newer JDKs (build hosts may run Temurin 25). A
+             no-op on JDK <=23, so it is safe for the Java 21 target too. -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+        <plugin>
+          <groupId>org.graalvm.buildtools</groupId>
+          <artifactId>native-maven-plugin</artifactId>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <!-- Publish to the GitLab project's Maven Package Registry. CI_API_V4_URL /
+       CI_PROJECT_ID are provided by GitLab CI; the CI_JOB_TOKEN credential lives
+       in settings.xml (consumed by `mvnw deploy -s settings.xml`), never here. -->
+  <distributionManagement>
+    <repository>
+      <id>gitlab-maven</id>
+      <url>${env.CI_API_V4_URL}/projects/${env.CI_PROJECT_ID}/packages/maven</url>
+    </repository>
+    <snapshotRepository>
+      <id>gitlab-maven</id>
+      <url>${env.CI_API_V4_URL}/projects/${env.CI_PROJECT_ID}/packages/maven</url>
+    </snapshotRepository>
+  </distributionManagement>
+</project>
