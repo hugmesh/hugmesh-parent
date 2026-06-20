@@ -4,24 +4,26 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <!-- Spring Boot 3.5.5 — the org baseline (matches snapdragon-admin-bff-api /
-       snapdragon-federation-api: proven WebFlux + Casdoor reactive JWT resource
-       server + GraalVM native on Java 21). -->
+  <!-- Spring Boot 4.0.2 — the Boot-4 org baseline (matches snapdragon-gateway:
+       "Spring Boot 4.0 / Spring Cloud 2025.1"; proven WebFlux + Casdoor reactive JWT
+       resource server + GraalVM native on Java 21). This is the 2.0.0 line; the 1.0.0
+       (Spring Boot 3.5.5) line stays untouched for the already-merged BFFs. -->
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.5.5</version>
+    <version>4.0.2</version>
     <relativePath/>
   </parent>
 
   <groupId>systems.snapdragon</groupId>
   <artifactId>snapdragon-parent</artifactId>
-  <version>1.0.0</version>
+  <version>2.0.0</version>
   <packaging>pom</packaging>
   <name>snapdragon-parent</name>
-  <description>Snapdragon ecosystem metapom: consolidates the Spring Boot 3.5.5 / Java 21
-    reactive BFF baseline (WebFlux + Casdoor OAuth2 resource server + R2DBC/Liquibase +
-    SpringDoc), shared dependencyManagement, pluginManagement, and GitLab Maven publishing.</description>
+  <description>Snapdragon ecosystem metapom (2.0.0 / Boot-4 line): consolidates the
+    Spring Boot 4.0.2 / Spring Cloud 2025.1 / Java 21 reactive BFF baseline (WebFlux +
+    Casdoor OAuth2 resource server + R2DBC/Liquibase + SpringDoc), shared
+    dependencyManagement, pluginManagement, and GitLab Maven publishing.</description>
 
   <properties>
     <java.version>21</java.version>
@@ -29,14 +31,31 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
     <!-- Shared, snapdragon-pinned versions. -->
-    <snapdragon-commons.version>1.0.0</snapdragon-commons.version>
-    <springdoc.version>2.7.0</springdoc.version>
-    <resilience4j.version>2.2.0</resilience4j.version>
+    <snapdragon-commons.version>2.0.0</snapdragon-commons.version>
+    <!-- Spring Cloud release train for Boot 4.0.x (matches snapdragon-gateway). -->
+    <spring-cloud.version>2025.1.0</spring-cloud.version>
+    <!-- SpringDoc: Boot-4 / Spring Framework 7 compatible line (3.x). -->
+    <springdoc.version>3.0.3</springdoc.version>
+    <!-- Resilience4j: the Boot-4 starter line. resilience4j-spring-boot4 (2.4.0)
+         replaces the old resilience4j-spring-boot3 starter and provides the
+         @CircuitBreaker / @RateLimiter annotation aspects on Spring Framework 7. -->
+    <resilience4j.version>2.4.0</resilience4j.version>
     <aws.sdk.version>2.28.3</aws.sdk.version>
   </properties>
 
   <dependencyManagement>
     <dependencies>
+      <!-- Spring Cloud release train (Gateway, Circuit Breaker / Resilience4j,
+           etc.) for the Boot-4 baseline. Imported BOM so children declare cloud
+           starters without a version. -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
       <!-- The snapdragon-commons shareable security/config/web library. Children
            add it as a plain compile dependency without a <version> (managed here). -->
       <dependency>
@@ -56,10 +75,10 @@
       </dependency>
 
       <!-- Resilience4j — circuit breakers on flaky write paths (federation override
-           apply/clear, admin effectors). Pinned to the Boot 3.5.x-compatible 2.2.0. -->
+           apply/clear, admin effectors). Boot-4 starter line (2.4.0). -->
       <dependency>
         <groupId>io.github.resilience4j</groupId>
-        <artifactId>resilience4j-spring-boot3</artifactId>
+        <artifactId>resilience4j-spring-boot4</artifactId>
         <version>${resilience4j.version}</version>
       </dependency>
       <dependency>
@@ -68,12 +87,40 @@
         <version>${resilience4j.version}</version>
       </dependency>
 
-      <!-- SpringDoc OpenAPI (WebFlux UI) — pinned to 2.7.0 for the Boot 3.5.x
-           baseline; managed so children declare it without a version. -->
+      <!-- SpringDoc OpenAPI (WebFlux UI) — Boot-4 / Spring Framework 7 line;
+           managed so children declare it without a version. -->
       <dependency>
         <groupId>org.springdoc</groupId>
         <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
         <version>${springdoc.version}</version>
+      </dependency>
+
+      <!-- Testcontainers BOM — Postgres/JUnit-Jupiter/R2DBC containers for the
+           full-stack integration slices. Imported so the testcontainers deps
+           below (and any child-specific ones) resolve without per-artifact
+           versions. -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>1.20.6</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- H2 PINS (override Boot 4's managed versions). Boot 4.0.x manages
+           io.r2dbc:r2dbc-h2 1.1.0 / com.h2database:h2 2.4.240, whose combination
+           regressed parameter binding for the H2 @DataR2dbcTest slices. Pinning
+           back to r2dbc-h2 1.0.0.RELEASE / H2 2.3.232 keeps the H2-backed reactive
+           data-slice tests green across all consumers. -->
+      <dependency>
+        <groupId>io.r2dbc</groupId>
+        <artifactId>r2dbc-h2</artifactId>
+        <version>1.0.0.RELEASE</version>
+      </dependency>
+      <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <version>2.3.232</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -94,6 +141,12 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-r2dbc</artifactId></dependency>
     <dependency><groupId>org.postgresql</groupId><artifactId>r2dbc-postgresql</artifactId><scope>runtime</scope></dependency>
     <dependency><groupId>org.liquibase</groupId><artifactId>liquibase-core</artifactId></dependency>
+    <!-- Boot 4 split LiquibaseAutoConfiguration out of the core autoconfigure
+         umbrella into its own module. WITHOUT spring-boot-liquibase on the
+         classpath the auto-config never registers and migrations silently never
+         run. Every consumer uses Liquibase, so it belongs in the shared baseline
+         (runtime scope: needed at runtime, not for compilation). -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-liquibase</artifactId><scope>runtime</scope></dependency>
     <dependency><groupId>org.springframework</groupId><artifactId>spring-jdbc</artifactId></dependency>
     <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
 
@@ -109,6 +162,24 @@
     <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-test</artifactId><scope>test</scope></dependency>
     <dependency><groupId>io.r2dbc</groupId><artifactId>r2dbc-h2</artifactId><scope>test</scope></dependency>
     <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
+    <!-- Boot 4 split the test-slice auto-configuration out of the umbrella
+         spring-boot-test-autoconfigure into per-module artifacts. The reactive BFF
+         baseline needs the WebFlux + WebTestClient slice (@WebFluxTest /
+         @AutoConfigureWebTestClient) and the R2DBC data slice (@DataR2dbcTest).
+         spring-boot-webflux-test transitively brings spring-boot-webtestclient. -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-webflux-test</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-data-r2dbc-test</artifactId><scope>test</scope></dependency>
+
+    <!-- Testcontainers — real Postgres for the full-stack integration slices.
+         spring-boot-testcontainers wires @ServiceConnection / @Testcontainers
+         support into the Boot test context; the postgresql / junit-jupiter /
+         r2dbc modules supply the container + R2DBC connection factory. Versions
+         from the Testcontainers BOM (junit-jupiter pulls JUnit 5 from the Boot
+         BOM). Inherited so every consumer gets identical integration-test infra. -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-testcontainers</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>org.testcontainers</groupId><artifactId>postgresql</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>org.testcontainers</groupId><artifactId>r2dbc</artifactId><scope>test</scope></dependency>
   </dependencies>
 
   <build>
