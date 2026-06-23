@@ -41,6 +41,34 @@
          @CircuitBreaker / @RateLimiter annotation aspects on Spring Framework 7. -->
     <resilience4j.version>2.4.0</resilience4j.version>
     <aws.sdk.version>2.28.3</aws.sdk.version>
+
+    <!-- ===== Static-analysis enforcement (shared, INHERITED) ===================
+         These wire the org's secure/clean-Java + reactive-readability conventions
+         (PMD A/B, Checkstyle F/G/H, SpotBugs+FindSecBugs D/E) into every Java
+         child build. The CURATED rulesets live in the snapdragon-build-config jar
+         (resource-only); each plugin declares that jar in its OWN <dependencies>
+         and reads the ruleset off the plugin classpath (PMD via /snapdragon/*.xml,
+         Checkstyle/SpotBugs via snapdragon/*.xml) — see <build><plugins> below.
+
+         WARN-FIRST: every plugin runs in REPORT mode (failOnViolation /
+         failOnError = false; spotbugs uses the reporting goal, not :check), so a
+         finding NEVER fails a build during rollout. To flip to fail-mode once the
+         fleet is clean, see the per-plugin comments (one property/goal change
+         each) and ${snapdragon.analysis.skip} for an escape hatch. -->
+    <snapdragon-build-config.version>0.1.0</snapdragon-build-config.version>
+    <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
+    <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+    <!-- Pin Checkstyle itself to a current 10.x (the plugin 3.6.0 default is the
+         older 9.3); 10.x is the Java 21+ bytecode-aware line and has all the
+         checks we use (VisibilityModifier/FinalClass/HideUtilityClassConstructor/
+         MutableException/LambdaBodyLength). -->
+    <checkstyle.version>10.21.4</checkstyle.version>
+    <spotbugs-maven-plugin.version>4.9.8.2</spotbugs-maven-plugin.version>
+    <findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
+
+    <!-- Master off-switch for ALL three analysers (e.g. a fast inner-loop build:
+         `-Dsnapdragon.analysis.skip=true`). Default false = always run in CI. -->
+    <snapdragon.analysis.skip>false</snapdragon.analysis.skip>
   </properties>
 
   <dependencyManagement>
@@ -62,6 +90,18 @@
         <groupId>systems.snapdragon</groupId>
         <artifactId>snapdragon-commons</artifactId>
         <version>${snapdragon-commons.version}</version>
+      </dependency>
+
+      <!-- The shared static-analysis ruleset jar (resource-only): carries the
+           curated PMD/Checkstyle/SpotBugs rulesets. It is NOT a child compile
+           dependency — it is added to each analysis PLUGIN's <dependencies> in
+           <build><plugins> below so each plugin reads /snapdragon/*.xml (PMD) or
+           snapdragon/*.xml (Checkstyle/SpotBugs) off its plugin classpath.
+           Managed here so that plugin reference can omit the <version>. -->
+      <dependency>
+        <groupId>systems.snapdragon</groupId>
+        <artifactId>snapdragon-build-config</artifactId>
+        <version>${snapdragon-build-config.version}</version>
       </dependency>
 
       <!-- AWS SDK v2 BOM — federation-api uses the synchronous S3Client; managed
@@ -209,6 +249,175 @@
         </plugin>
       </plugins>
     </pluginManagement>
+
+    <!-- ===================================================================
+         INHERITED static-analysis plugins (the durable, org-wide enforcement).
+
+         These live in <build><plugins> (NOT just pluginManagement) so they bind
+         to `verify` and RUN AUTOMATICALLY in every Java child without the child
+         declaring anything. On THIS pom-packaging parent they are a no-op: PMD,
+         Checkstyle and SpotBugs all skip a project with no main sources / pom
+         packaging, so `mvn -N verify`/`install` here stays clean.
+
+         WARN-FIRST across all three (report, never fail). Each plugin's flip to
+         fail-mode is a single documented change, called out inline.
+
+         Each plugin pulls the CURATED ruleset from the snapdragon-build-config
+         jar declared in its OWN <dependencies>, and references it as a CLASSPATH
+         resource (PMD uses a leading-slash path `/snapdragon/...`; Checkstyle and
+         SpotBugs use the bare `snapdragon/...` configLocation/filter path) — that
+         is how a separate repo can see a ruleset that physically lives in another
+         artifact, since the plugin reads it off its own plugin classloader.
+         =================================================================== -->
+    <plugins>
+
+      <!-- PMD — conventions A (FinalFieldCouldBeStatic) + B (ImmutableField).
+           Reporting goal `pmd:pmd` bound to verify; failOnViolation=false so
+           findings are reported (target/pmd.xml + target/site) but never fail.
+           FLIP TO FAIL: change the goal from `pmd` to `check` (or set
+           <failOnViolation>true</failOnViolation> and add the `check` goal). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-pmd-plugin</artifactId>
+        <version>${maven-pmd-plugin.version}</version>
+        <configuration>
+          <skip>${snapdragon.analysis.skip}</skip>
+          <!-- WARN-FIRST: report, do not fail the build. -->
+          <failOnViolation>false</failOnViolation>
+          <printFailingErrors>true</printFailingErrors>
+          <linkXRef>false</linkXRef>
+          <targetJdk>${java.version}</targetJdk>
+          <rulesets>
+            <ruleset>/snapdragon/pmd-ruleset.xml</ruleset>
+          </rulesets>
+        </configuration>
+        <dependencies>
+          <!-- Resolve /snapdragon/pmd-ruleset.xml off the plugin classpath from
+               this jar (maven-pmd-plugin uses a leading-slash classpath path, the
+               same form as the bundled /category/java/*.xml rulesets). -->
+          <dependency>
+            <groupId>systems.snapdragon</groupId>
+            <artifactId>snapdragon-build-config</artifactId>
+            <version>${snapdragon-build-config.version}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <id>pmd-analysis</id>
+            <phase>verify</phase>
+            <goals>
+              <!-- `pmd` = analyse + write report (warn). `check` would fail the
+                   build on violations — that is the fail-mode flip. -->
+              <goal>pmd</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Checkstyle — conventions F (VisibilityModifier), G (FinalClass /
+           HideUtilityClassConstructor / MutableException), H (LambdaBodyLength).
+           Goal `checkstyle:checkstyle` (report) bound to verify;
+           failOnViolation=false + failsOnError=false so it never fails the build.
+           FLIP TO FAIL: switch the goal to `check` AND set
+           <failOnViolation>true</failOnViolation> (and raise the ruleset severity
+           to error). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>${maven-checkstyle-plugin.version}</version>
+        <configuration>
+          <skip>${snapdragon.analysis.skip}</skip>
+          <configLocation>snapdragon/checkstyle.xml</configLocation>
+          <includeTestSourceDirectory>false</includeTestSourceDirectory>
+          <!-- WARN-FIRST: never fail on violations or on parse errors. -->
+          <failOnViolation>false</failOnViolation>
+          <failsOnError>false</failsOnError>
+          <linkXRef>false</linkXRef>
+        </configuration>
+        <dependencies>
+          <!-- Resolve snapdragon/checkstyle.xml from the build-config jar... -->
+          <dependency>
+            <groupId>systems.snapdragon</groupId>
+            <artifactId>snapdragon-build-config</artifactId>
+            <version>${snapdragon-build-config.version}</version>
+          </dependency>
+          <!-- ...and run on a current Checkstyle (10.x) rather than the plugin's
+               older bundled default, for Java 21+ source support. -->
+          <dependency>
+            <groupId>com.puppycrawl.tools</groupId>
+            <artifactId>checkstyle</artifactId>
+            <version>${checkstyle.version}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <id>checkstyle-analysis</id>
+            <phase>verify</phase>
+            <goals>
+              <!-- `checkstyle` = analyse + write target/checkstyle-result.xml
+                   (warn). `check` is the fail-mode flip. -->
+              <goal>checkstyle</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- SpotBugs + FindSecBugs — conventions D (EI_EXPOSE_REP* / MS_EXPOSE_REP /
+           MS_MUTABLE_*) + E (MS_SHOULD_BE_FINAL). Goal `spotbugs:spotbugs`
+           (analyse + write target/spotbugsXml.xml) bound to verify;
+           failOnError=false so a SpotBugs internal error never breaks the build,
+           and we use the REPORTING goal (not `check`) so findings never fail.
+           The INCLUDE filter narrows to exactly the D/E patterns; the EXCLUDE
+           filter is the entity/test baseline.
+           FLIP TO FAIL: change the goal from `spotbugs` to `check` (the `check`
+           goal fails the build when the report is non-empty). -->
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>${spotbugs-maven-plugin.version}</version>
+        <configuration>
+          <skip>${snapdragon.analysis.skip}</skip>
+          <!-- WARN-FIRST: a plugin/analysis error must not fail the build. -->
+          <failOnError>false</failOnError>
+          <!-- Deeper analysis = better D/E detection; low/medium effort misses
+               some rep-exposure. -->
+          <effort>Max</effort>
+          <threshold>Low</threshold>
+          <includeFilterFile>snapdragon/spotbugs-include.xml</includeFilterFile>
+          <excludeFilterFile>snapdragon/spotbugs-exclude.xml</excludeFilterFile>
+          <plugins>
+            <!-- FindSecBugs adds the security-flavoured rep-exposure detectors
+                 (keys/tokens/byte[]) under the same EI_EXPOSE_REP*/MS_* names. -->
+            <plugin>
+              <groupId>com.h3xstream.findsecbugs</groupId>
+              <artifactId>findsecbugs-plugin</artifactId>
+              <version>${findsecbugs-plugin.version}</version>
+            </plugin>
+          </plugins>
+        </configuration>
+        <dependencies>
+          <!-- The include/exclude filter files live in the build-config jar; the
+               spotbugs plugin reads them off its plugin classpath. -->
+          <dependency>
+            <groupId>systems.snapdragon</groupId>
+            <artifactId>snapdragon-build-config</artifactId>
+            <version>${snapdragon-build-config.version}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <id>spotbugs-analysis</id>
+            <phase>verify</phase>
+            <goals>
+              <!-- `spotbugs` = analyse + write target/spotbugsXml.xml (warn).
+                   `check` is the fail-mode flip. -->
+              <goal>spotbugs</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+    </plugins>
   </build>
 
   <!-- Publish to the GitLab project's Maven Package Registry. CI_API_V4_URL /

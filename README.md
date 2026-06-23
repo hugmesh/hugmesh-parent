@@ -45,7 +45,50 @@ services target 2.0.0.
 - **pluginManagement:** compiler, surefire (with the Byte Buddy
   `-Dnet.bytebuddy.experimental=true` flag for newer JDKs), spring-boot-maven-plugin,
   native-maven-plugin (GraalVM).
+- **Inherited static-analysis enforcement** (`<build><plugins>`, runs in every Java
+  child, no-op on this pom parent): PMD, Checkstyle and SpotBugs+FindSecBugs wire the
+  org's secure/clean-Java + reactive-readability conventions and run **warn-first**
+  (report, never fail). See the section below.
 - **distributionManagement:** the GitLab project Maven Package Registry.
+
+## Static-analysis enforcement (inherited, warn-first)
+
+Every Java repo that parents off this metapom automatically runs three analysers on
+`verify` — the child declares nothing. The curated rulesets are NOT in this repo; they
+ship in the resource-only **`systems.snapdragon:snapdragon-build-config`** jar and are
+referenced on each plugin's own classpath (PMD `/snapdragon/*.xml`, Checkstyle/SpotBugs
+`snapdragon/*.xml`). That is the only mechanism by which a separate repo can see a
+ruleset that physically lives elsewhere, and it gives curated rules + automatic
+inheritance with one new artifact.
+
+| Plugin | Conventions | Rules | Report |
+|--------|-------------|-------|--------|
+| `maven-pmd-plugin` | **A**, **B** | `FinalFieldCouldBeStatic`, `ImmutableField` | `target/pmd.xml` |
+| `maven-checkstyle-plugin` | **F**, **G**, **H** | `VisibilityModifier`, `FinalClass`, `HideUtilityClassConstructor`, `MutableException`, `LambdaBodyLength` | `target/checkstyle-result.xml` |
+| `spotbugs-maven-plugin` + FindSecBugs | **D**, **E** | `EI_EXPOSE_REP*`, `MS_EXPOSE_REP`, `MS_MUTABLE_*`, `MS_SHOULD_BE_FINAL` (include-filtered) | `target/spotbugsXml.xml` |
+
+Convention **C** (enum for fixed string sets) and the *defensive-copy fix* /
+*lambda→method-ref* / *nesting* halves of D and H have no reliable low-noise static
+rule, so they remain agent-pass conventions — by design, no rule is added that would
+flag every lambda or every collection field.
+
+**Warn-first.** All three run in REPORT mode: `failOnViolation=false` /
+`failsOnError=false` / SpotBugs `failOnError=false` + the reporting goal (`pmd:pmd`,
+`checkstyle:checkstyle`, `spotbugs:spotbugs`), never the `:check` goal. A finding never
+fails a build during rollout. The SpotBugs include filter narrows to exactly the D/E
+patterns and `snapdragon/spotbugs-exclude.xml` is the entity/test baseline so the signal
+stays high.
+
+**Flip to fail-mode** (once the fleet is clean), per plugin, in this repo's pom:
+
+- PMD: change the execution goal `pmd` → `check` (or set `<failOnViolation>true</failOnViolation>`).
+- Checkstyle: change the goal `checkstyle` → `check`, set `<failOnViolation>true</failOnViolation>`, and raise the ruleset `severity` to `error`.
+- SpotBugs: change the goal `spotbugs` → `check`.
+
+**Escape hatch.** `-Dsnapdragon.analysis.skip=true` skips all three (e.g. a fast
+inner-loop build); default is `false`, so CI always runs them. To bump a ruleset, edit
+`snapdragon-build-config` and bump `${snapdragon-build-config.version}` here — no runtime
+artifact churn.
 
 ## Using it in a service repo
 
