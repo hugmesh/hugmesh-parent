@@ -17,7 +17,7 @@
 
   <groupId>systems.snapdragon</groupId>
   <artifactId>snapdragon-parent</artifactId>
-  <version>2.0.0</version>
+  <version>2.1.0</version>
   <packaging>pom</packaging>
   <name>snapdragon-parent</name>
   <description>Snapdragon ecosystem metapom (2.0.0 / Boot-4 line): consolidates the
@@ -259,8 +259,10 @@
          Checkstyle and SpotBugs all skip a project with no main sources / pom
          packaging, so `mvn -N verify`/`install` here stays clean.
 
-         WARN-FIRST across all three (report, never fail). Each plugin's flip to
-         fail-mode is a single documented change, called out inline.
+         PMD is in FAIL MODE (pmd:check, failOnViolation=true) — the fleet was
+         verified clean before this flip. Checkstyle and SpotBugs remain in
+         WARN-FIRST mode until per-repo suppression files cover pre-existing
+         style violations (separate effort).
 
          Each plugin pulls the CURATED ruleset from the snapdragon-build-config
          jar declared in its OWN <dependencies>, and references it as a CLASSPATH
@@ -272,18 +274,18 @@
     <plugins>
 
       <!-- PMD — conventions A (FinalFieldCouldBeStatic) + B (ImmutableField).
-           Reporting goal `pmd:pmd` bound to verify; failOnViolation=false so
-           findings are reported (target/pmd.xml + target/site) but never fail.
-           FLIP TO FAIL: change the goal from `pmd` to `check` (or set
-           <failOnViolation>true</failOnViolation> and add the `check` goal). -->
+           FAIL MODE: pmd:check fails the build on any violation.
+           Fleet was verified clean (all 11 Java repos pass pmd:check) before
+           this flip. Checkstyle and SpotBugs remain in warn mode until their
+           pre-existing org-wide style violations are suppressed repo-by-repo. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-pmd-plugin</artifactId>
         <version>${maven-pmd-plugin.version}</version>
         <configuration>
           <skip>${snapdragon.analysis.skip}</skip>
-          <!-- WARN-FIRST: report, do not fail the build. -->
-          <failOnViolation>false</failOnViolation>
+          <!-- FAIL MODE: violations fail the build. -->
+          <failOnViolation>true</failOnViolation>
           <printFailingErrors>true</printFailingErrors>
           <linkXRef>false</linkXRef>
           <targetJdk>${java.version}</targetJdk>
@@ -306,9 +308,8 @@
             <id>pmd-analysis</id>
             <phase>verify</phase>
             <goals>
-              <!-- `pmd` = analyse + write report (warn). `check` would fail the
-                   build on violations — that is the fail-mode flip. -->
-              <goal>pmd</goal>
+              <!-- `check` = analyse + fail on violations (fail mode). -->
+              <goal>check</goal>
             </goals>
           </execution>
         </executions>
