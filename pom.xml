@@ -17,16 +17,16 @@
 
   <groupId>systems.snapdragon</groupId>
   <artifactId>snapdragon-parent</artifactId>
-  <version>2.5.0</version>
+  <version>2.6.0</version>
   <packaging>pom</packaging>
   <name>snapdragon-parent</name>
   <description>Snapdragon ecosystem metapom (2.0.0 / Boot-4 line): consolidates the
-    Spring Boot 4.0.7 / Spring Cloud 2025.1 / Java 21 reactive BFF baseline (WebFlux +
+    Spring Boot 4.0.7 / Spring Cloud 2025.1 / Java 25 reactive BFF baseline (WebFlux +
     Casdoor OAuth2 resource server + R2DBC/Liquibase + SpringDoc), shared
     dependencyManagement, pluginManagement, and GitLab Maven publishing.</description>
 
   <properties>
-    <java.version>21</java.version>
+    <java.version>25</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
