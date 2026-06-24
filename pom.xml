@@ -17,7 +17,7 @@
 
   <groupId>systems.snapdragon</groupId>
   <artifactId>snapdragon-parent</artifactId>
-  <version>2.2.0</version>
+  <version>2.3.0</version>
   <packaging>pom</packaging>
   <name>snapdragon-parent</name>
   <description>Snapdragon ecosystem metapom (2.0.0 / Boot-4 line): consolidates the
@@ -50,12 +50,11 @@
          and reads the ruleset off the plugin classpath (PMD via /snapdragon/*.xml,
          Checkstyle/SpotBugs via snapdragon/*.xml) — see <build><plugins> below.
 
-         WARN-FIRST: every plugin runs in REPORT mode (failOnViolation /
-         failOnError = false; spotbugs uses the reporting goal, not :check), so a
-         finding NEVER fails a build during rollout. To flip to fail-mode once the
-         fleet is clean, see the per-plugin comments (one property/goal change
-         each) and ${snapdragon.analysis.skip} for an escape hatch. -->
-    <snapdragon-build-config.version>0.2.0</snapdragon-build-config.version>
+         ALL THREE analysers are now in FAIL MODE (failOnViolation=true; SpotBugs
+         uses :check not :spotbugs). Fleet verified clean before each flip.
+         Use ${snapdragon.analysis.skip} as an escape hatch for fast inner-loop
+         builds. -->
+    <snapdragon-build-config.version>0.3.0</snapdragon-build-config.version>
     <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <!-- Pin Checkstyle itself to a current 10.x (the plugin 3.6.0 default is the
@@ -259,10 +258,10 @@
          Checkstyle and SpotBugs all skip a project with no main sources / pom
          packaging, so `mvn -N verify`/`install` here stays clean.
 
-         PMD is in FAIL MODE (pmd:check, failOnViolation=true) — the fleet was
-         verified clean before this flip. SpotBugs remains in WARN-FIRST mode
-         until per-repo suppression files cover pre-existing findings
-         (separate effort).
+         PMD, Checkstyle, and SpotBugs are all in FAIL MODE — the fleet was
+         verified clean before each flip. SpotBugs EI_EXPOSE_REP2 suppressed
+         for Spring component packages (constructor injection FP) via
+         build-config 0.3.0.
 
          Each plugin pulls the CURATED ruleset from the snapdragon-build-config
          jar declared in its OWN <dependencies>, and references it as a CLASSPATH
@@ -276,8 +275,7 @@
       <!-- PMD — conventions A (FinalFieldCouldBeStatic) + B (ImmutableField).
            FAIL MODE: pmd:check fails the build on any violation.
            Fleet was verified clean (all 11 Java repos pass pmd:check) before
-           this flip. SpotBugs remains in warn mode until pre-existing findings
-           are suppressed repo-by-repo. -->
+           this flip. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-pmd-plugin</artifactId>
@@ -360,21 +358,23 @@
       </plugin>
 
       <!-- SpotBugs + FindSecBugs — conventions D (EI_EXPOSE_REP* / MS_EXPOSE_REP /
-           MS_MUTABLE_*) + E (MS_SHOULD_BE_FINAL). Goal `spotbugs:spotbugs`
-           (analyse + write target/spotbugsXml.xml) bound to verify;
-           failOnError=false so a SpotBugs internal error never breaks the build,
-           and we use the REPORTING goal (not `check`) so findings never fail.
-           The INCLUDE filter narrows to exactly the D/E patterns; the EXCLUDE
-           filter is the entity/test baseline.
-           FLIP TO FAIL: change the goal from `spotbugs` to `check` (the `check`
-           goal fails the build when the report is non-empty). -->
+           MS_MUTABLE_*) + E (MS_SHOULD_BE_FINAL).
+           FAIL MODE: spotbugs:check, failOnViolation=true. Fleet verified clean
+           before this flip. EI_EXPOSE_REP2 suppressed for Spring component
+           packages (constructor injection FP) via build-config 0.3.0 exclude
+           filter. The INCLUDE filter narrows to exactly the D/E patterns; the
+           EXCLUDE filter covers entity/test/Spring-injection baseline.
+           failOnError=false so a SpotBugs internal error (e.g. missing class)
+           never fails the build spuriously. -->
       <plugin>
         <groupId>com.github.spotbugs</groupId>
         <artifactId>spotbugs-maven-plugin</artifactId>
         <version>${spotbugs-maven-plugin.version}</version>
         <configuration>
           <skip>${snapdragon.analysis.skip}</skip>
-          <!-- WARN-FIRST: a plugin/analysis error must not fail the build. -->
+          <!-- FAIL MODE: violations fail the build. -->
+          <failOnViolation>true</failOnViolation>
+          <!-- A plugin/analysis error (missing class etc.) must not fail spuriously. -->
           <failOnError>false</failOnError>
           <!-- Deeper analysis = better D/E detection; low/medium effort misses
                some rep-exposure. -->
@@ -406,9 +406,8 @@
             <id>spotbugs-analysis</id>
             <phase>verify</phase>
             <goals>
-              <!-- `spotbugs` = analyse + write target/spotbugsXml.xml (warn).
-                   `check` is the fail-mode flip. -->
-              <goal>spotbugs</goal>
+              <!-- `check` = analyse + fail on violations (fail mode). -->
+              <goal>check</goal>
             </goals>
           </execution>
         </executions>
