@@ -17,7 +17,7 @@
 
   <groupId>systems.snapdragon</groupId>
   <artifactId>snapdragon-parent</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
   <packaging>pom</packaging>
   <name>snapdragon-parent</name>
   <description>Snapdragon ecosystem metapom (2.0.0 / Boot-4 line): consolidates the
@@ -55,7 +55,7 @@
          finding NEVER fails a build during rollout. To flip to fail-mode once the
          fleet is clean, see the per-plugin comments (one property/goal change
          each) and ${snapdragon.analysis.skip} for an escape hatch. -->
-    <snapdragon-build-config.version>0.1.0</snapdragon-build-config.version>
+    <snapdragon-build-config.version>0.2.0</snapdragon-build-config.version>
     <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <!-- Pin Checkstyle itself to a current 10.x (the plugin 3.6.0 default is the
@@ -260,9 +260,9 @@
          packaging, so `mvn -N verify`/`install` here stays clean.
 
          PMD is in FAIL MODE (pmd:check, failOnViolation=true) — the fleet was
-         verified clean before this flip. Checkstyle and SpotBugs remain in
-         WARN-FIRST mode until per-repo suppression files cover pre-existing
-         style violations (separate effort).
+         verified clean before this flip. SpotBugs remains in WARN-FIRST mode
+         until per-repo suppression files cover pre-existing findings
+         (separate effort).
 
          Each plugin pulls the CURATED ruleset from the snapdragon-build-config
          jar declared in its OWN <dependencies>, and references it as a CLASSPATH
@@ -276,8 +276,8 @@
       <!-- PMD — conventions A (FinalFieldCouldBeStatic) + B (ImmutableField).
            FAIL MODE: pmd:check fails the build on any violation.
            Fleet was verified clean (all 11 Java repos pass pmd:check) before
-           this flip. Checkstyle and SpotBugs remain in warn mode until their
-           pre-existing org-wide style violations are suppressed repo-by-repo. -->
+           this flip. SpotBugs remains in warn mode until pre-existing findings
+           are suppressed repo-by-repo. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-pmd-plugin</artifactId>
@@ -317,11 +317,8 @@
 
       <!-- Checkstyle — conventions F (VisibilityModifier), G (FinalClass /
            HideUtilityClassConstructor / MutableException), H (LambdaBodyLength).
-           Goal `checkstyle:checkstyle` (report) bound to verify;
-           failOnViolation=false + failsOnError=false so it never fails the build.
-           FLIP TO FAIL: switch the goal to `check` AND set
-           <failOnViolation>true</failOnViolation> (and raise the ruleset severity
-           to error). -->
+           FAIL MODE: checkstyle:check, failOnViolation=true, severity=error in
+           build-config. Fleet verified clean before this flip. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
@@ -330,8 +327,8 @@
           <skip>${snapdragon.analysis.skip}</skip>
           <configLocation>snapdragon/checkstyle.xml</configLocation>
           <includeTestSourceDirectory>false</includeTestSourceDirectory>
-          <!-- WARN-FIRST: never fail on violations or on parse errors. -->
-          <failOnViolation>false</failOnViolation>
+          <!-- FAIL MODE: violations fail the build. -->
+          <failOnViolation>true</failOnViolation>
           <failsOnError>false</failsOnError>
           <linkXRef>false</linkXRef>
         </configuration>
@@ -355,9 +352,8 @@
             <id>checkstyle-analysis</id>
             <phase>verify</phase>
             <goals>
-              <!-- `checkstyle` = analyse + write target/checkstyle-result.xml
-                   (warn). `check` is the fail-mode flip. -->
-              <goal>checkstyle</goal>
+              <!-- `check` = analyse + fail on violations (fail mode). -->
+              <goal>check</goal>
             </goals>
           </execution>
         </executions>
