@@ -11,17 +11,17 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.2</version>
+    <version>4.0.7</version>
     <relativePath/>
   </parent>
 
   <groupId>systems.snapdragon</groupId>
   <artifactId>snapdragon-parent</artifactId>
-  <version>2.4.0</version>
+  <version>2.5.0</version>
   <packaging>pom</packaging>
   <name>snapdragon-parent</name>
   <description>Snapdragon ecosystem metapom (2.0.0 / Boot-4 line): consolidates the
-    Spring Boot 4.0.2 / Spring Cloud 2025.1 / Java 21 reactive BFF baseline (WebFlux +
+    Spring Boot 4.0.7 / Spring Cloud 2025.1 / Java 21 reactive BFF baseline (WebFlux +
     Casdoor OAuth2 resource server + R2DBC/Liquibase + SpringDoc), shared
     dependencyManagement, pluginManagement, and GitLab Maven publishing.</description>
 
@@ -33,7 +33,7 @@
     <!-- Shared, snapdragon-pinned versions. -->
     <snapdragon-commons.version>2.0.0</snapdragon-commons.version>
     <!-- Spring Cloud release train for Boot 4.0.x (matches snapdragon-gateway). -->
-    <spring-cloud.version>2025.1.0</spring-cloud.version>
+    <spring-cloud.version>2025.1.2</spring-cloud.version>
     <!-- SpringDoc: Boot-4 / Spring Framework 7 compatible line (3.x). -->
     <springdoc.version>3.0.3</springdoc.version>
     <!-- Resilience4j: the Boot-4 starter line. resilience4j-spring-boot4 (2.4.0)
