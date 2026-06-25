@@ -47,11 +47,14 @@ services target 2.7.0.
   native-maven-plugin (GraalVM).
 - **Inherited static-analysis enforcement** (`<build><plugins>`, runs in every Java
   child, no-op on this pom parent): PMD, Checkstyle and SpotBugs+FindSecBugs wire the
-  org's secure/clean-Java + reactive-readability conventions and run **warn-first**
-  (report, never fail). See the section below.
+  org's secure/clean-Java + reactive-readability conventions and **fail the build on
+  violations** (`:check` goals, `failOnViolation=true`). See the section below.
+- **`aspectjweaver`** is included in the dependency set so that `@CircuitBreaker` and
+  other Spring AOP annotations from Resilience4j wire automatically across all child
+  repos without any per-repo AspectJ configuration.
 - **distributionManagement:** the GitLab project Maven Package Registry.
 
-## Static-analysis enforcement (inherited, warn-first)
+## Static-analysis enforcement (inherited, fail-mode)
 
 Every Java repo that parents off this metapom automatically runs three analysers on
 `verify` — the child declares nothing. The curated rulesets are NOT in this repo; they
@@ -61,7 +64,7 @@ referenced on each plugin's own classpath (PMD `/snapdragon/*.xml`, Checkstyle/S
 ruleset that physically lives elsewhere, and it gives curated rules + automatic
 inheritance with one new artifact.
 
-| Plugin | Conventions | Rules | Report |
+| Plugin | Conventions | Rules | Output |
 |--------|-------------|-------|--------|
 | `maven-pmd-plugin` | **A**, **B** | `FinalFieldCouldBeStatic`, `ImmutableField` | `target/pmd.xml` |
 | `maven-checkstyle-plugin` | **F**, **G**, **H** | `VisibilityModifier`, `FinalClass`, `HideUtilityClassConstructor`, `MutableException`, `LambdaBodyLength` | `target/checkstyle-result.xml` |
@@ -72,18 +75,12 @@ Convention **C** (enum for fixed string sets) and the *defensive-copy fix* /
 rule, so they remain agent-pass conventions — by design, no rule is added that would
 flag every lambda or every collection field.
 
-**Warn-first.** All three run in REPORT mode: `failOnViolation=false` /
-`failsOnError=false` / SpotBugs `failOnError=false` + the reporting goal (`pmd:pmd`,
-`checkstyle:checkstyle`, `spotbugs:spotbugs`), never the `:check` goal. A finding never
-fails a build during rollout. The SpotBugs include filter narrows to exactly the D/E
-patterns and `snapdragon/spotbugs-exclude.xml` is the entity/test baseline so the signal
-stays high.
-
-**Flip to fail-mode** (once the fleet is clean), per plugin, in this repo's pom:
-
-- PMD: change the execution goal `pmd` → `check` (or set `<failOnViolation>true</failOnViolation>`).
-- Checkstyle: change the goal `checkstyle` → `check`, set `<failOnViolation>true</failOnViolation>`, and raise the ruleset `severity` to `error`.
-- SpotBugs: change the goal `spotbugs` → `check`.
+**Fail-mode.** All three analysers run with the `:check` goal and `failOnViolation=true`
+(PMD: `pmd:check`; Checkstyle: `checkstyle:check`, `failOnViolation=true`; SpotBugs:
+`spotbugs:check`). A violation fails the build. The SpotBugs include filter narrows to
+exactly the D/E patterns and `snapdragon/spotbugs-exclude.xml` is the entity/test
+baseline so the signal stays high. All three analysers were flipped to fail-mode in
+PRs #4 (PMD), #5 (Checkstyle), and #6 (SpotBugs).
 
 **Escape hatch.** `-Dsnapdragon.analysis.skip=true` skips all three (e.g. a fast
 inner-loop build); default is `false`, so CI always runs them. To bump a ruleset, edit
