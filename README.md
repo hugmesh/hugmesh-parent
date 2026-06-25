@@ -1,7 +1,7 @@
 # snapdragon-parent
 
 The Snapdragon ecosystem **metapom** (`packaging=pom`). It consolidates the shared
-Spring Boot 4.0.2 / Spring Cloud 2025.1 / Java 21 reactive-BFF baseline so every
+Spring Boot 4.0.7 / Spring Cloud 2025.1 / Java 25 reactive-BFF baseline so every
 service repo inherits one audited set of starters, versions, plugins, and publishing
 config instead of copying them.
 
@@ -10,20 +10,20 @@ config instead of copying them.
 ```
 groupId:    systems.snapdragon
 artifactId: snapdragon-parent
-version:    2.0.0
+version:    2.7.0
 packaging:  pom
 ```
 
-Itself a child of `org.springframework.boot:spring-boot-starter-parent:4.0.2`.
+Itself a child of `org.springframework.boot:spring-boot-starter-parent:4.0.7`.
 
-This is the **2.0.0 / Boot-4 line**. The legacy **1.0.0 / Spring Boot 3.5.5 line**
+This is the **2.7.0 / Boot-4 line**. The legacy **1.0.0 / Spring Boot 3.5.5 line**
 stays untouched for any BFF that has not yet migrated, but all new and migrated
-services target 2.0.0.
+services target 2.7.0.
 
 ## What it provides
 
-- **Properties:** `java.version=21`, UTF-8 encoding, and pinned versions for
-  `snapdragon-commons` (2.0.0), the Spring Cloud release train (2025.1.0), SpringDoc
+- **Properties:** `java.version=25`, UTF-8 encoding, and pinned versions for
+  `snapdragon-commons` (2.7.0), the Spring Cloud release train (2025.1.2), SpringDoc
   (3.0.3, the Boot-4 / Spring Framework 7 line), Resilience4j (2.4.0, the Boot-4
   starter line), and the AWS SDK BOM (2.28.3).
 - **Common dependencies** (inherited by every reactive BFF): WebFlux, Actuator,
@@ -34,7 +34,7 @@ services target 2.0.0.
   WebFlux UI; plus the test stack (spring-boot-starter-test, reactor-test,
   spring-security-test, r2dbc-h2, h2, the Boot-4 split test-slice modules
   `spring-boot-webflux-test` / `spring-boot-data-r2dbc-test`, and the Testcontainers
-  integration-test infra `spring-boot-testcontainers` + postgresql/junit-jupiter/r2dbc).
+  integration-test infra `spring-boot-testcontainers` + testcontainers-postgresql/testcontainers-junit-jupiter/testcontainers-r2dbc).
 - **dependencyManagement:** the Spring Cloud `spring-cloud-dependencies` BOM (import),
   `snapdragon-commons`, AWS SDK BOM (import), Resilience4j
   (`resilience4j-spring-boot4` + `resilience4j-reactor`), SpringDoc, the
@@ -96,7 +96,7 @@ artifact churn.
 <parent>
   <groupId>systems.snapdragon</groupId>
   <artifactId>snapdragon-parent</artifactId>
-  <version>2.0.0</version>
+  <version>2.7.0</version>
   <relativePath/>
 </parent>
 ```
@@ -107,9 +107,9 @@ cassandra, icu4j, webauthn4j, s3, …), repo-specific properties, and any custom
 configuration.
 
 The **gateway** repos (Spring Boot 4.0 / Spring Cloud 2025.1) are now on the same
-baseline this metapom targets; the 2.0.0 line was deliberately aligned with the
+baseline this metapom targets; the 2.7.0 line was deliberately aligned with the
 gateway's proven WebFlux + Casdoor reactive JWT resource-server + GraalVM-native
-configuration on Java 21.
+configuration on Java 25.
 
 ## What stays per-repo
 
@@ -128,14 +128,16 @@ the same machine can resolve it offline.
 
 ## Current State
 
-- On `main`, the metapom is fully on the **2.0.0 / Boot-4** baseline: Spring Boot
-  4.0.2, Spring Cloud 2025.1.0, Java 21, `snapdragon-commons` 2.0.0. The Boot-4
-  migration (PR #1) is merged; there are no outstanding feature branches.
+- On `main`, the metapom is fully on the **2.7.0 / Boot-4** baseline: Spring Boot
+  4.0.7, Spring Cloud 2025.1.2, Java 25, `snapdragon-commons` 2.7.0. PRs through #10
+  are merged (Boot-4 migration, static-analysis, testcontainers baseline,
+  TIER-A patch bumps, Java 25, testcontainers 2.x bump); there are no outstanding
+  feature branches.
 - This metapom carries **no application/auth code** — it only pins versions, shared
   starters, plugins, and publishing config. The org's shared security/tenancy code
-  lives in `snapdragon-commons` (`systems.snapdragon.commons.*`, 2.0.0), and the
+  lives in `snapdragon-commons` (`systems.snapdragon.commons.*`, 2.7.0), and the
   shared account/session/MFA/Casdoor-admin infrastructure lives in the new
-  `snapdragon-auth-core` (2.0.0, depends on commons; consumed by `user-bff` and
+  `snapdragon-auth-core` (2.7.0, depends on commons; consumed by `user-bff` and
   `admin-bff`). Both are downstream consumers of this baseline, not part of it.
 - Ecosystem auth model (for context; enforced in the consumer repos, not here):
   Casdoor is the SSO IdP; `login-ui` does the OIDC authorization-code (PKCE)
@@ -150,14 +152,14 @@ the same machine can resolve it offline.
 - The Spring Cloud Gateway 5.0 route-config move
   (`spring.cloud.gateway.routes` → `spring.cloud.gateway.server.webflux.routes`) is a
   gateway/generator concern, not a metapom concern; this repo only pins the Spring
-  Cloud 2025.1.0 train that introduces it.
+  Cloud 2025.1.2 train that introduces it.
 
 ## Roadmap
 
 This repo is intentionally thin; its roadmap is to **track the org baseline** as the
 platform evolves:
 
-- Keep the 2.0.0 line pinned to the same Spring Boot / Spring Cloud train the
+- Keep the 2.7.0 line pinned to the same Spring Boot / Spring Cloud train the
   gateways run, and bump shared versions (`snapdragon-commons`, SpringDoc,
   Resilience4j, Testcontainers, AWS SDK) in lockstep across consumers.
 - Add `snapdragon-auth-core` to `dependencyManagement` (managed version) once enough
