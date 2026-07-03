@@ -1,7 +1,7 @@
 # snapdragon-parent
 
 The Snapdragon ecosystem **metapom** (`packaging=pom`). It consolidates the shared
-Spring Boot 4.0.7 / Spring Cloud 2025.1 / Java 25 reactive-BFF baseline so every
+Spring Boot 4.0.7 / Spring Cloud 2025.1.2 / Java 25 reactive-BFF baseline so every
 service repo inherits one audited set of starters, versions, plugins, and publishing
 config instead of copying them.
 
@@ -23,7 +23,7 @@ services target 2.7.0.
 ## What it provides
 
 - **Properties:** `java.version=25`, UTF-8 encoding, and pinned versions for
-  `snapdragon-commons` (2.7.0), the Spring Cloud release train (2025.1.2), SpringDoc
+  `snapdragon-commons` (2.0.0), the Spring Cloud release train (2025.1.2), SpringDoc
   (3.0.3, the Boot-4 / Spring Framework 7 line), Resilience4j (2.4.0, the Boot-4
   starter line), and the AWS SDK BOM (2.28.3).
 - **Common dependencies** (inherited by every reactive BFF): WebFlux, Actuator,
@@ -75,12 +75,15 @@ Convention **C** (enum for fixed string sets) and the *defensive-copy fix* /
 rule, so they remain agent-pass conventions — by design, no rule is added that would
 flag every lambda or every collection field.
 
-**Fail-mode.** All three analysers run with the `:check` goal and `failOnViolation=true`
-(PMD: `pmd:check`; Checkstyle: `checkstyle:check`, `failOnViolation=true`; SpotBugs:
-`spotbugs:check`). A violation fails the build. The SpotBugs include filter narrows to
-exactly the D/E patterns and `snapdragon/spotbugs-exclude.xml` is the entity/test
-baseline so the signal stays high. All three analysers were flipped to fail-mode in
-PRs #4 (PMD), #5 (Checkstyle), and #6 (SpotBugs).
+**Fail-mode.** All three run in CHECK mode: `failOnViolation=true` + the `:check` goal
+(`pmd:check`, `checkstyle:check`, `spotbugs:check`), not the reporting-only goals
+(`pmd:pmd`, `checkstyle:checkstyle`, `spotbugs:spotbugs`). A finding fails the build.
+SpotBugs additionally sets `failOnError=false` so a plugin/analysis error (e.g. a
+missing class) never fails the build spuriously. The fleet was verified clean before
+each flip, and all three analysers were flipped to fail-mode in PRs #4 (PMD), #5
+(Checkstyle), and #6 (SpotBugs). The SpotBugs include filter narrows to exactly the
+D/E patterns and `snapdragon/spotbugs-exclude.xml` is the entity/test baseline so the
+signal stays high.
 
 **Escape hatch.** `-Dsnapdragon.analysis.skip=true` skips all three (e.g. a fast
 inner-loop build); default is `false`, so CI always runs them. To bump a ruleset, edit
@@ -126,7 +129,7 @@ the same machine can resolve it offline.
 ## Current State
 
 - On `main`, the metapom is fully on the **2.7.0 / Boot-4** baseline: Spring Boot
-  4.0.7, Spring Cloud 2025.1.2, Java 25, `snapdragon-commons` 2.7.0. PRs through #10
+  4.0.7, Spring Cloud 2025.1.2, Java 25, `snapdragon-commons` 2.0.0. PRs through #10
   are merged (Boot-4 migration, static-analysis, testcontainers baseline,
   TIER-A patch bumps, Java 25, testcontainers 2.x bump); there are no outstanding
   feature branches.
@@ -169,3 +172,19 @@ platform evolves:
   versioned backups, egress VPN drop-in, per-node attached storage, desktop app
   governance, workload console, device-license registry, multi-tenant superadmin,
   games app-store, A/V via coturn/TURN, and OWASP pen-test + nuclei in the CI pipeline.
+
+## Known Gaps / TODO
+
+- The previous gap here (CI images pinning JDK 21 against the Java 25 baseline)
+  was fixed by bumping `validate:pom` and `deploy:maven` in `.gitlab-ci.yml` to
+  `eclipse-temurin:25-jdk`.
+- The previous gap here (`pom.xml:7-10`'s `<parent>` block comment citing stale
+  "Spring Boot 4.0.2 ... Java 21" values) was fixed — the comment now reads
+  4.0.7 / Java 25 / "2.x line", matching `spring-boot-starter-parent` **4.0.7**
+  (`pom.xml:14`) and `java.version` **25** (`pom.xml:29`).
+- New: the surefire `pluginManagement` comment (`pom.xml:246-248`, explaining the
+  `-Dnet.bytebuddy.experimental=true` flag) still says the no-op flag "is safe for
+  the Java 21 target too" — a leftover from before `java.version` was bumped 21→25.
+  The Byte-Buddy-via-JDK-25 rationale is still correct; only the trailing "Java 21
+  target" phrase is stale and should read 25 (or be dropped) next time that file is
+  touched.

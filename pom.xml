@@ -4,9 +4,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <!-- Spring Boot 4.0.2 — the Boot-4 org baseline (matches snapdragon-gateway:
+  <!-- Spring Boot 4.0.7 — the Boot-4 org baseline (matches snapdragon-gateway:
        "Spring Boot 4.0 / Spring Cloud 2025.1"; proven WebFlux + Casdoor reactive JWT
-       resource server + GraalVM native on Java 21). This is the 2.0.0 line; the 1.0.0
+       resource server + GraalVM native on Java 25). This is the 2.x line; the 1.0.0
        (Spring Boot 3.5.5) line stays untouched for the already-merged BFFs. -->
   <parent>
     <groupId>org.springframework.boot</groupId>
