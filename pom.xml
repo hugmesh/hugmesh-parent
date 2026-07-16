@@ -20,7 +20,7 @@
   <version>2.7.0</version>
   <packaging>pom</packaging>
   <name>snapdragon-parent</name>
-  <description>Snapdragon ecosystem metapom (2.0.0 / Boot-4 line): consolidates the
+  <description>Snapdragon ecosystem metapom (2.7.0 / Boot-4 line): consolidates the
     Spring Boot 4.0.7 / Spring Cloud 2025.1 / Java 25 reactive BFF baseline (WebFlux +
     Casdoor OAuth2 resource server + R2DBC/Liquibase + SpringDoc), shared
     dependencyManagement, pluginManagement, and GitLab Maven publishing.</description>
@@ -244,8 +244,8 @@
           <artifactId>maven-compiler-plugin</artifactId>
         </plugin>
         <!-- Byte Buddy (via Mockito) only officially supports up to JDK 23; this
-             flag lets it run on newer JDKs (build hosts may run Temurin 25). A
-             no-op on JDK <=23, so it is safe for the Java 21 target too. -->
+             flag lets it run on newer JDKs (build hosts run Temurin 25, matching
+             the java.version=25 target above). A no-op on JDK <=23. -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>

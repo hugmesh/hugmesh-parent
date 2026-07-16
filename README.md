@@ -90,6 +90,32 @@ inner-loop build); default is `false`, so CI always runs them. To bump a ruleset
 `snapdragon-build-config` and bump `${snapdragon-build-config.version}` here — no runtime
 artifact churn.
 
+## Architecture
+
+This repo has no runtime of its own — it is a POM artifact that sits between the
+Spring Boot parent and every reactive-BFF child repo, plus the CI job that publishes it:
+
+```mermaid
+flowchart TD
+    SBSP["spring-boot-starter-parent<br/>4.0.7"] --> SP["snapdragon-parent 2.7.0<br/>(this repo, packaging=pom)"]
+
+    SBC["snapdragon-build-config<br/>(PMD / Checkstyle / SpotBugs rulesets)"] -.->|"plugin classpath only,<br/>not a compile dependency"| SP
+    SC["snapdragon-commons 2.0.0"] -.->|"managed version"| SP
+
+    SP -->|"parent + inherited starters,<br/>test infra, analysis plugins"| BFF["Reactive BFF child repos<br/>(admin-bff-api, user-bff-api, mod-bff-api,<br/>federation-api, forum-bff-api, wiki-bff-api, ...)"]
+
+    SP -->|"./mvnw deploy<br/>-s settings.xml"| REG[("GitLab Maven<br/>Package Registry")]
+    REG -->|"resolved via CI_JOB_TOKEN<br/>or local ~/.m2 install"| BFF
+```
+
+Two dotted inputs feed the parent without becoming a child's compile dependency:
+`snapdragon-build-config` is read off each analysis plugin's own classpath (see the
+table above), and `snapdragon-commons`'s version is only *managed* here — a child still
+declares it explicitly to pull it in. The solid arrows are the real dependency/publish
+paths: `spring-boot-starter-parent` down into this pom, this pom down into every child
+BFF's effective POM, and the GitLab CI `deploy` stage publishing this artifact for
+those children to resolve.
+
 ## Using it in a service repo
 
 ```xml
@@ -129,16 +155,20 @@ the same machine can resolve it offline.
 ## Current State
 
 - On `main`, the metapom is fully on the **2.7.0 / Boot-4** baseline: Spring Boot
-  4.0.7, Spring Cloud 2025.1.2, Java 25, `snapdragon-commons` 2.0.0. PRs through #10
-  are merged (Boot-4 migration, static-analysis, testcontainers baseline,
-  TIER-A patch bumps, Java 25, testcontainers 2.x bump); there are no outstanding
-  feature branches.
+  4.0.7, Spring Cloud 2025.1.2, Java 25, `snapdragon-commons` 2.0.0. PRs through #13
+  are merged (Boot-4 migration, static-analysis fail-mode flips, testcontainers
+  baseline, TIER-A patch bumps, Java 25, testcontainers 2.x bump, plus three
+  documentation-accuracy passes and a readability/comment cleanup); there are no
+  outstanding feature branches.
 - This metapom carries **no application/auth code** — it only pins versions, shared
   starters, plugins, and publishing config. The org's shared security/tenancy code
-  lives in `snapdragon-commons` (`systems.snapdragon.commons.*`, 2.7.0), and the
-  shared account/session/MFA/Casdoor-admin infrastructure lives in the new
-  `snapdragon-auth-core` (2.7.0, depends on commons; consumed by `user-bff` and
-  `admin-bff`). Both are downstream consumers of this baseline, not part of it.
+  lives in `snapdragon-commons` (`systems.snapdragon.commons.*`, its own release line
+  is currently 2.0.0 — the same version this metapom pins in `dependencyManagement`),
+  and the shared account/session/MFA/Casdoor-admin infrastructure lives in
+  `snapdragon-auth-core` (own release line currently 2.3.4, depends on commons and on
+  this parent 2.7.0; consumed by `user-bff` and `admin-bff`). Both are downstream
+  consumers of this baseline (they parent off 2.7.0), not part of it — don't confuse
+  their own artifact version with the 2.7.0 parent version they depend on.
 - Ecosystem auth model (for context; enforced in the consumer repos, not here):
   Casdoor is the SSO IdP; `login-ui` does the OIDC authorization-code (PKCE)
   redirect; `user-bff` performs the server-side code→token exchange and holds the
@@ -182,9 +212,29 @@ platform evolves:
   "Spring Boot 4.0.2 ... Java 21" values) was fixed — the comment now reads
   4.0.7 / Java 25 / "2.x line", matching `spring-boot-starter-parent` **4.0.7**
   (`pom.xml:14`) and `java.version` **25** (`pom.xml:29`).
-- New: the surefire `pluginManagement` comment (`pom.xml:246-248`, explaining the
-  `-Dnet.bytebuddy.experimental=true` flag) still says the no-op flag "is safe for
-  the Java 21 target too" — a leftover from before `java.version` was bumped 21→25.
-  The Byte-Buddy-via-JDK-25 rationale is still correct; only the trailing "Java 21
-  target" phrase is stale and should read 25 (or be dropped) next time that file is
-  touched.
+- The previous gap here (the surefire `pluginManagement` comment near `pom.xml:246`
+  explaining `-Dnet.bytebuddy.experimental=true`, which still said the flag "is safe
+  for the Java 21 target too") was fixed — the trailing clause now references the
+  actual `java.version=25` target instead of the pre-bump value.
+- New: this README's own "Current State" section was citing `snapdragon-commons` and
+  `snapdragon-auth-core` as version "2.7.0" — confusing each consumer's own release
+  version with the `snapdragon-parent` 2.7.0 they depend on. Checked both repos'
+  actual `pom.xml` on `main`: `snapdragon-commons` is on its own 2.0.0 line (matching
+  this repo's `snapdragon-commons.version` pin) and `snapdragon-auth-core` is on its
+  own 2.3.4 line. Fixed the wording above to state each repo's real version and to
+  call out the version-vs-parent-version distinction explicitly, since
+  `snapdragon-auth-core` hit this exact same mix-up in its own README (fixed there in
+  its PR #24, "commons dependency is 2.0.0, not 2.7.0").
+- Fixed one more real drift the previous pass's line-by-line check missed:
+  `pom.xml:23`'s `<description>` still read `"(2.0.0 / Boot-4 line)"` — the
+  literal text set when the artifact first moved to the Boot-4 baseline at
+  version 2.0.0 — even though `<version>` (`pom.xml:20`) has since moved
+  through six releases to 2.7.0. Updated the description to `"2.7.0 / Boot-4
+  line"` to match the current `<version>` and the README's own phrasing.
+- `pom.xml`, `.gitlab-ci.yml`, and `settings.xml` were otherwise re-checked
+  line-by-line against this README in this pass (2026-07-16) and match current
+  reality (version 2.7.0, Boot 4.0.7, Java 25, fail-mode analysers, H2 pins,
+  testcontainers-bom 2.0.5). This metapom has no Java sources, so there is no dead
+  code to remove here — dead-code/dead-doc sweeps on this repo reduce to keeping this
+  file and the two config files in sync, which is what each pass in this section
+  verifies.
