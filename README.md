@@ -48,7 +48,8 @@ services target 2.7.0.
 - **Inherited static-analysis enforcement** (`<build><plugins>`, runs in every Java
   child, no-op on this pom parent): PMD, Checkstyle and SpotBugs+FindSecBugs wire the
   org's secure/clean-Java + reactive-readability conventions and **fail the build on
-  violations** (`:check` goals, `failOnViolation=true`). See the section below.
+  violations** (`:check` goals; `failOnViolation=true` for PMD/Checkstyle,
+  `failOnError=true` for SpotBugs). See the section below.
 - **`aspectjweaver`** is included in the dependency set so that `@CircuitBreaker` and
   other Spring AOP annotations from Resilience4j wire automatically across all child
   repos without any per-repo AspectJ configuration.
@@ -75,15 +76,39 @@ Convention **C** (enum for fixed string sets) and the *defensive-copy fix* /
 rule, so they remain agent-pass conventions — by design, no rule is added that would
 flag every lambda or every collection field.
 
-**Fail-mode.** All three run in CHECK mode: `failOnViolation=true` + the `:check` goal
-(`pmd:check`, `checkstyle:check`, `spotbugs:check`), not the reporting-only goals
-(`pmd:pmd`, `checkstyle:checkstyle`, `spotbugs:spotbugs`). A finding fails the build.
-SpotBugs additionally sets `failOnError=false` so a plugin/analysis error (e.g. a
-missing class) never fails the build spuriously. The fleet was verified clean before
-each flip, and all three analysers were flipped to fail-mode in PRs #4 (PMD), #5
-(Checkstyle), and #6 (SpotBugs). The SpotBugs include filter narrows to exactly the
-D/E patterns and `snapdragon/spotbugs-exclude.xml` is the entity/test baseline so the
-signal stays high.
+**Fail-mode.** All three run in CHECK mode via the `:check` goal (`pmd:check`,
+`checkstyle:check`, `spotbugs:check`), not the reporting-only goals (`pmd:pmd`,
+`checkstyle:checkstyle`, `spotbugs:spotbugs`). A finding fails the build. PMD and
+Checkstyle gate on `failOnViolation=true`; **SpotBugs gates on `failOnError=true`**,
+because `failOnViolation` is not a parameter of the `spotbugs:check` goal at all.
+
+On `spotbugs:check`, `failOnError` gates real bug findings and SpotBugs-internal
+analysis errors *together* (its failure message is `failed with <N> bugs and <M>
+errors`); the plugin offers no way to separate them. An internal error therefore
+fails the build by design — an incomplete analysis must not report green.
+
+> **History — this gate was fail-open.** PR #6 moved SpotBugs to `spotbugs:check`
+> and set `failOnViolation=true`, but that parameter does not exist on the goal
+> (Maven only logs `[WARNING] Parameter 'failOnViolation' is unknown`) and left
+> `failOnError=false` from the warn-first era. From `7d22f1a` until the flip to
+> `failOnError=true`, **SpotBugs never failed any build in any child repo.** The
+> claim that "the fleet was verified clean before each flip" is accurate for PMD
+> (#4) and Checkstyle (#5), but was never true for SpotBugs (#6) — nothing was
+> gating it.
+
+**Scope: this gate is not a security scanner.** The include filter lists only the
+core-SpotBugs D/E patterns. FindSecBugs 1.14.0 ships 144 patterns
+(`SQL_INJECTION_*`, `COMMAND_INJECTION`, `HARD_CODE_PASSWORD`, …) and defines none
+of the `EI_EXPOSE_REP*`/`MS_*` names, so while the FindSecBugs plugin is loaded it
+contributes **zero** findings under the current include filter. It enforces
+defensive-copy / mutable-static conventions only. Widening that scope is a
+`snapdragon-build-config` change, tracked separately.
+
+`snapdragon/spotbugs-exclude.xml` is the entity/test/Spring-injection baseline. Note
+its Spring-injection suppression matches *layer* package names
+(`.controller`/`.service`/…) while the BFF fleet uses *feature* packages
+(`adminbff.announcement.AnnouncementService`), so that suppression does not
+currently fire — the dominant reason live violation counts are high.
 
 **Escape hatch.** `-Dsnapdragon.analysis.skip=true` skips all three (e.g. a fast
 inner-loop build); default is `false`, so CI always runs them. To bump a ruleset, edit

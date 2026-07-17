@@ -50,8 +50,16 @@
          and reads the ruleset off the plugin classpath (PMD via /snapdragon/*.xml,
          Checkstyle/SpotBugs via snapdragon/*.xml) — see <build><plugins> below.
 
-         ALL THREE analysers are now in FAIL MODE (failOnViolation=true; SpotBugs
-         uses :check not :spotbugs). Fleet verified clean before each flip.
+         ALL THREE analysers are in FAIL MODE: PMD and Checkstyle via
+         failOnViolation=true, SpotBugs via spotbugs:check + failOnError=true
+         (failOnViolation is NOT a parameter of the spotbugs:check goal — see the
+         SpotBugs plugin block below).
+         NOTE: "fleet verified clean before each flip" holds for PMD and
+         Checkstyle only. It was never true for SpotBugs: that gate was
+         inadvertently fail-OPEN from 7d22f1a (PR #6) onward, so no SpotBugs flip
+         was ever actually gated on a clean fleet. Closing it surfaces real
+         pre-existing violations — see the PR that introduced this comment for the
+         per-repo counts and the required sequencing.
          Use ${snapdragon.analysis.skip} as an escape hatch for fast inner-loop
          builds. -->
     <snapdragon-build-config.version>0.3.0</snapdragon-build-config.version>
@@ -374,23 +382,48 @@
 
       <!-- SpotBugs + FindSecBugs — conventions D (EI_EXPOSE_REP* / MS_EXPOSE_REP /
            MS_MUTABLE_*) + E (MS_SHOULD_BE_FINAL).
-           FAIL MODE: spotbugs:check, failOnViolation=true. Fleet verified clean
-           before this flip. EI_EXPOSE_REP2 suppressed for Spring component
-           packages (constructor injection FP) via build-config 0.3.0 exclude
-           filter. The INCLUDE filter narrows to exactly the D/E patterns; the
-           EXCLUDE filter covers entity/test/Spring-injection baseline.
-           failOnError=false so a SpotBugs internal error (e.g. missing class)
-           never fails the build spuriously. -->
+           FAIL MODE: spotbugs:check, failOnError=true (see the <configuration>
+           note below for why that — not failOnViolation — is the real switch).
+           The INCLUDE filter narrows to exactly the D/E patterns; the EXCLUDE
+           filter covers the entity/test/Spring-injection baseline.
+
+           SCOPE CAVEAT (do not overstate this gate): the INCLUDE filter lists
+           only core-SpotBugs D/E pattern names. FindSecBugs 1.14.0 ships 144
+           patterns (SQL_INJECTION_*, COMMAND_INJECTION, HARD_CODE_PASSWORD, ...)
+           and defines NONE of the EI_EXPOSE_REP*/MS_* names, so with this include
+           filter in place the FindSecBugs plugin currently contributes zero
+           findings. This gate enforces defensive-copy/mutable-static conventions,
+           NOT security scanning. Re-scoping the include filter is tracked
+           separately in snapdragon-build-config.
+
+           EI_EXPOSE_REP2 is meant to be suppressed for Spring constructor
+           injection via the build-config 0.3.0 exclude filter, but that filter
+           matches on LAYER package names (.controller/.service/.repository/...)
+           while the fleet's BFFs use FEATURE packages (adminbff.announcement.
+           AnnouncementService), so it does not fire. That gap is what makes the
+           current violation counts large; see the PR description. -->
       <plugin>
         <groupId>com.github.spotbugs</groupId>
         <artifactId>spotbugs-maven-plugin</artifactId>
         <version>${spotbugs-maven-plugin.version}</version>
         <configuration>
           <skip>${snapdragon.analysis.skip}</skip>
-          <!-- FAIL MODE: violations fail the build. -->
-          <failOnViolation>true</failOnViolation>
-          <!-- A plugin/analysis error (missing class etc.) must not fail spuriously. -->
-          <failOnError>false</failOnError>
+          <!-- FAIL MODE: violations fail the build.
+               NOTE: `failOnError` is the ONLY fail switch the spotbugs:check goal
+               has, and it gates BOTH real bug findings AND SpotBugs-internal
+               analysis errors together — the goal's own failure message is
+               "failed with <N> bugs and <M> errors". The two are NOT separable
+               on this goal, so the previous intent ("fail on violations but never
+               on an internal error") is not expressible here. We accept the
+               internal-error case as a build failure: a SpotBugs error means the
+               analysis did NOT run to completion, so reporting green would be a
+               false pass on a gate that never actually ran.
+               `check` does NOT have a `failOnViolation` parameter (it belongs to
+               maven-pmd-plugin / maven-checkstyle-plugin). Passing it here is
+               silently ignored except for a "[WARNING] Parameter 'failOnViolation'
+               is unknown" line — which is exactly how this gate sat fail-OPEN
+               from 7d22f1a (PR #6) until now. Do not re-add it. -->
+          <failOnError>true</failOnError>
           <!-- Deeper analysis = better D/E detection; low/medium effort misses
                some rep-exposure. -->
           <effort>Max</effort>
