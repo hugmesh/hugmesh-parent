@@ -62,7 +62,7 @@
          per-repo counts and the required sequencing.
          Use ${snapdragon.analysis.skip} as an escape hatch for fast inner-loop
          builds. -->
-    <snapdragon-build-config.version>0.3.0</snapdragon-build-config.version>
+    <snapdragon-build-config.version>0.4.0</snapdragon-build-config.version>
     <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <!-- Pin Checkstyle itself to a current 10.x (the plugin 3.6.0 default is the
@@ -281,10 +281,15 @@
          Checkstyle and SpotBugs all skip a project with no main sources / pom
          packaging, so `mvn -N verify`/`install` here stays clean.
 
-         PMD, Checkstyle, and SpotBugs are all in FAIL MODE — the fleet was
-         verified clean before each flip. SpotBugs EI_EXPOSE_REP2 suppressed
-         for Spring component packages (constructor injection FP) via
-         build-config 0.3.0.
+         PMD, Checkstyle, and SpotBugs are all in FAIL MODE. "Fleet verified
+         clean before each flip" holds for PMD and Checkstyle only — see the
+         properties block above for why it was never true of SpotBugs.
+         SpotBugs EI_EXPOSE_REP2 is suppressed for the Spring constructor-
+         injection FP via build-config 0.4.0, which matches the CLASS-NAME
+         SUFFIX (*Service/*Controller/...). The 0.3.0 filter matched LAYER
+         PACKAGE names and therefore almost never fired against this fleet's
+         FEATURE-package layout; 0.4.0 is what actually makes that
+         suppression take effect.
 
          Each plugin pulls the CURATED ruleset from the snapdragon-build-config
          jar declared in its OWN <dependencies>, and references it as a CLASSPATH
@@ -387,21 +392,30 @@
            The INCLUDE filter narrows to exactly the D/E patterns; the EXCLUDE
            filter covers the entity/test/Spring-injection baseline.
 
-           SCOPE CAVEAT (do not overstate this gate): the INCLUDE filter lists
-           only core-SpotBugs D/E pattern names. FindSecBugs 1.14.0 ships 144
+           SCOPE NOTE: through build-config 0.3.0 the INCLUDE filter listed only
+           the core-SpotBugs D/E pattern names, and since FindSecBugs 1.14.0's 144
            patterns (SQL_INJECTION_*, COMMAND_INJECTION, HARD_CODE_PASSWORD, ...)
-           and defines NONE of the EI_EXPOSE_REP*/MS_* names, so with this include
-           filter in place the FindSecBugs plugin currently contributes zero
-           findings. This gate enforces defensive-copy/mutable-static conventions,
-           NOT security scanning. Re-scoping the include filter is tracked
-           separately in snapdragon-build-config.
+           share NONE of the EI_EXPOSE_REP*/MS_* names, the FindSecBugs plugin
+           contributed zero findings — the gate enforced defensive-copy/mutable-
+           static conventions only, NOT security scanning. build-config 0.4.0
+           (this bump) RE-SCOPES the include filter to admit the 137 FindSecBugs
+           patterns that were empirically measured to fire zero findings fleet-wide
+           (SQLi, path-traversal, hard-coded secrets, weak crypto, XXE, unsafe
+           deserialization, SSRF, ...), so the gate now DOES enforce those security
+           conventions on all future code — at zero cost today because the fleet is
+           currently clean on them. The 7 patterns that DO fire (SPRING_ENDPOINT,
+           CRLF_INJECTION_LOGS, IMPROPER_UNICODE + 4 triaged-FP) remain excluded on
+           purpose; admitting them is tracked separately in snapdragon-build-config.
 
-           EI_EXPOSE_REP2 is meant to be suppressed for Spring constructor
-           injection via the build-config 0.3.0 exclude filter, but that filter
-           matches on LAYER package names (.controller/.service/.repository/...)
-           while the fleet's BFFs use FEATURE packages (adminbff.announcement.
-           AnnouncementService), so it does not fire. That gap is what makes the
-           current violation counts large; see the PR description. -->
+           EI_EXPOSE_REP2 is suppressed for Spring constructor injection via the
+           build-config exclude filter. Through 0.3.0 that filter matched on
+           LAYER package names (.controller/.service/.repository/...) while this
+           fleet's BFFs use FEATURE packages (adminbff.announcement.
+           AnnouncementService), so it did not fire — which is what made the
+           violation counts large. build-config 0.4.0 matches the class-name
+           suffix instead, and guards the suppression so that genuinely mutable
+           state (byte[]/char[] key material, List/Map/Set/Collection/Date) is
+           still REPORTED even inside a *Service. -->
       <plugin>
         <groupId>com.github.spotbugs</groupId>
         <artifactId>spotbugs-maven-plugin</artifactId>
