@@ -1,6 +1,6 @@
-# snapdragon-parent
+# hugmesh-parent
 
-The Snapdragon ecosystem **metapom** (`packaging=pom`). It consolidates the shared
+The HugMesh ecosystem **metapom** (`packaging=pom`). It consolidates the shared
 Spring Boot 4.0.7 / Spring Cloud 2025.1.2 / Java 25 reactive-BFF baseline so every
 service repo inherits one audited set of starters, versions, plugins, and publishing
 config instead of copying them.
@@ -8,22 +8,22 @@ config instead of copying them.
 ## Coordinates
 
 ```
-groupId:    systems.snapdragon
-artifactId: snapdragon-parent
-version:    2.7.0
+groupId:    systems.hugmesh
+artifactId: hugmesh-parent
+version:    2.8.0
 packaging:  pom
 ```
 
 Itself a child of `org.springframework.boot:spring-boot-starter-parent:4.0.7`.
 
-This is the **2.7.0 / Boot-4 line**. The legacy **1.0.0 / Spring Boot 3.5.5 line**
+This is the **2.8.0 / Boot-4 line**. The legacy **1.0.0 / Spring Boot 3.5.5 line**
 stays untouched for any BFF that has not yet migrated, but all new and migrated
-services target 2.7.0.
+services target 2.8.0.
 
 ## What it provides
 
 - **Properties:** `java.version=25`, UTF-8 encoding, and pinned versions for
-  `snapdragon-commons` (2.0.0), the Spring Cloud release train (2025.1.2), SpringDoc
+  `hugmesh-commons` (2.1.0), the Spring Cloud release train (2025.1.2), SpringDoc
   (3.0.3, the Boot-4 / Spring Framework 7 line), Resilience4j (2.4.0, the Boot-4
   starter line), and the AWS SDK BOM (2.28.3).
 - **Common dependencies** (inherited by every reactive BFF): WebFlux, Actuator,
@@ -36,7 +36,7 @@ services target 2.7.0.
   `spring-boot-webflux-test` / `spring-boot-data-r2dbc-test`, and the Testcontainers
   integration-test infra `spring-boot-testcontainers` + testcontainers-postgresql/testcontainers-junit-jupiter/testcontainers-r2dbc).
 - **dependencyManagement:** the Spring Cloud `spring-cloud-dependencies` BOM (import),
-  `snapdragon-commons`, AWS SDK BOM (import), Resilience4j
+  `hugmesh-commons`, AWS SDK BOM (import), Resilience4j
   (`resilience4j-spring-boot4` + `resilience4j-reactor`), SpringDoc, the
   Testcontainers BOM (import), plus deliberate **H2 pins** (`r2dbc-h2 1.0.0.RELEASE` /
   `h2 2.3.232`) that override Boot 4's managed versions, whose combination regressed
@@ -59,9 +59,9 @@ services target 2.7.0.
 
 Every Java repo that parents off this metapom automatically runs three analysers on
 `verify` — the child declares nothing. The curated rulesets are NOT in this repo; they
-ship in the resource-only **`systems.snapdragon:snapdragon-build-config`** jar and are
-referenced on each plugin's own classpath (PMD `/snapdragon/*.xml`, Checkstyle/SpotBugs
-`snapdragon/*.xml`). That is the only mechanism by which a separate repo can see a
+ship in the resource-only **`systems.hugmesh:hugmesh-build-config`** jar and are
+referenced on each plugin's own classpath (PMD `/hugmesh/*.xml`, Checkstyle/SpotBugs
+`hugmesh/*.xml`). That is the only mechanism by which a separate repo can see a
 ruleset that physically lives elsewhere, and it gives curated rules + automatic
 inheritance with one new artifact.
 
@@ -102,17 +102,17 @@ core-SpotBugs D/E patterns. FindSecBugs 1.14.0 ships 144 patterns
 of the `EI_EXPOSE_REP*`/`MS_*` names, so while the FindSecBugs plugin is loaded it
 contributes **zero** findings under the current include filter. It enforces
 defensive-copy / mutable-static conventions only. Widening that scope is a
-`snapdragon-build-config` change, tracked separately.
+`hugmesh-build-config` change, tracked separately.
 
-`snapdragon/spotbugs-exclude.xml` is the entity/test/Spring-injection baseline. Note
+`hugmesh/spotbugs-exclude.xml` is the entity/test/Spring-injection baseline. Note
 its Spring-injection suppression matches *layer* package names
 (`.controller`/`.service`/…) while the BFF fleet uses *feature* packages
 (`adminbff.announcement.AnnouncementService`), so that suppression does not
 currently fire — the dominant reason live violation counts are high.
 
-**Escape hatch.** `-Dsnapdragon.analysis.skip=true` skips all three (e.g. a fast
+**Escape hatch.** `-Dhugmesh.analysis.skip=true` skips all three (e.g. a fast
 inner-loop build); default is `false`, so CI always runs them. To bump a ruleset, edit
-`snapdragon-build-config` and bump `${snapdragon-build-config.version}` here — no runtime
+`hugmesh-build-config` and bump `${hugmesh-build-config.version}` here — no runtime
 artifact churn.
 
 ## Architecture
@@ -122,10 +122,10 @@ Spring Boot parent and every reactive-BFF child repo, plus the CI job that publi
 
 ```mermaid
 flowchart TD
-    SBSP["spring-boot-starter-parent<br/>4.0.7"] --> SP["snapdragon-parent 2.7.0<br/>(this repo, packaging=pom)"]
+    SBSP["spring-boot-starter-parent<br/>4.0.7"] --> SP["hugmesh-parent 2.8.0<br/>(this repo, packaging=pom)"]
 
-    SBC["snapdragon-build-config<br/>(PMD / Checkstyle / SpotBugs rulesets)"] -.->|"plugin classpath only,<br/>not a compile dependency"| SP
-    SC["snapdragon-commons 2.0.0"] -.->|"managed version"| SP
+    SBC["hugmesh-build-config<br/>(PMD / Checkstyle / SpotBugs rulesets)"] -.->|"plugin classpath only,<br/>not a compile dependency"| SP
+    SC["hugmesh-commons 2.1.0"] -.->|"managed version"| SP
 
     SP -->|"parent + inherited starters,<br/>test infra, analysis plugins"| BFF["Reactive BFF child repos<br/>(admin-bff-api, user-bff-api, mod-bff-api,<br/>federation-api, forum-bff-api, wiki-bff-api, ...)"]
 
@@ -134,8 +134,8 @@ flowchart TD
 ```
 
 Two dotted inputs feed the parent without becoming a child's compile dependency:
-`snapdragon-build-config` is read off each analysis plugin's own classpath (see the
-table above), and `snapdragon-commons`'s version is only *managed* here — a child still
+`hugmesh-build-config` is read off each analysis plugin's own classpath (see the
+table above), and `hugmesh-commons`'s version is only *managed* here — a child still
 declares it explicitly to pull it in. The solid arrows are the real dependency/publish
 paths: `spring-boot-starter-parent` down into this pom, this pom down into every child
 BFF's effective POM, and the GitLab CI `deploy` stage publishing this artifact for
@@ -145,9 +145,9 @@ those children to resolve.
 
 ```xml
 <parent>
-  <groupId>systems.snapdragon</groupId>
-  <artifactId>snapdragon-parent</artifactId>
-  <version>2.7.0</version>
+  <groupId>systems.hugmesh</groupId>
+  <artifactId>hugmesh-parent</artifactId>
+  <version>2.8.0</version>
   <relativePath/>
 </parent>
 ```
@@ -158,7 +158,7 @@ cassandra, icu4j, webauthn4j, s3, …), repo-specific properties, and any custom
 configuration.
 
 The **gateway** repos (Spring Boot 4.0 / Spring Cloud 2025.1) are now on the same
-baseline this metapom targets; the 2.7.0 line was deliberately aligned with the
+baseline this metapom targets; the 2.8.0 line was deliberately aligned with the
 gateway's proven WebFlux + Casdoor reactive JWT resource-server + GraalVM-native
 configuration on Java 25.
 
@@ -179,21 +179,21 @@ the same machine can resolve it offline.
 
 ## Current State
 
-- On `main`, the metapom is fully on the **2.7.0 / Boot-4** baseline: Spring Boot
-  4.0.7, Spring Cloud 2025.1.2, Java 25, `snapdragon-commons` 2.0.0. PRs through #13
+- On `main`, the metapom is fully on the **2.8.0 / Boot-4** baseline: Spring Boot
+  4.0.7, Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.1.0. PRs through #13
   are merged (Boot-4 migration, static-analysis fail-mode flips, testcontainers
   baseline, TIER-A patch bumps, Java 25, testcontainers 2.x bump, plus three
   documentation-accuracy passes and a readability/comment cleanup); there are no
   outstanding feature branches.
 - This metapom carries **no application/auth code** — it only pins versions, shared
   starters, plugins, and publishing config. The org's shared security/tenancy code
-  lives in `snapdragon-commons` (`systems.snapdragon.commons.*`, its own release line
-  is currently 2.0.0 — the same version this metapom pins in `dependencyManagement`),
+  lives in `hugmesh-commons` (`systems.hugmesh.commons.*`, its own release line
+  is currently 2.1.0 — the same version this metapom pins in `dependencyManagement`),
   and the shared account/session/MFA/Casdoor-admin infrastructure lives in
-  `snapdragon-auth-core` (own release line currently 2.3.4, depends on commons and on
-  this parent 2.7.0; consumed by `user-bff` and `admin-bff`). Both are downstream
-  consumers of this baseline (they parent off 2.7.0), not part of it — don't confuse
-  their own artifact version with the 2.7.0 parent version they depend on.
+  `hugmesh-auth-core` (own release line currently 2.3.4, depends on commons and on
+  this parent 2.8.0; consumed by `user-bff` and `admin-bff`). Both are downstream
+  consumers of this baseline (they parent off 2.8.0), not part of it — don't confuse
+  their own artifact version with the 2.8.0 parent version they depend on.
 - Ecosystem auth model (for context; enforced in the consumer repos, not here):
   Casdoor is the SSO IdP; `login-ui` does the OIDC authorization-code (PKCE)
   redirect; `user-bff` performs the server-side code→token exchange and holds the
@@ -214,10 +214,10 @@ the same machine can resolve it offline.
 This repo is intentionally thin; its roadmap is to **track the org baseline** as the
 platform evolves:
 
-- Keep the 2.7.0 line pinned to the same Spring Boot / Spring Cloud train the
-  gateways run, and bump shared versions (`snapdragon-commons`, SpringDoc,
+- Keep the 2.8.0 line pinned to the same Spring Boot / Spring Cloud train the
+  gateways run, and bump shared versions (`hugmesh-commons`, SpringDoc,
   Resilience4j, Testcontainers, AWS SDK) in lockstep across consumers.
-- Add `snapdragon-auth-core` to `dependencyManagement` (managed version) once enough
+- Add `hugmesh-auth-core` to `dependencyManagement` (managed version) once enough
   consumers depend on it, so `user-bff` / `admin-bff` declare it without a `<version>`.
 - Retire the H2 pins if/when an upstream Boot-4 r2dbc-h2 release fixes the
   parameter-binding regression.
@@ -241,24 +241,24 @@ platform evolves:
   explaining `-Dnet.bytebuddy.experimental=true`, which still said the flag "is safe
   for the Java 21 target too") was fixed — the trailing clause now references the
   actual `java.version=25` target instead of the pre-bump value.
-- New: this README's own "Current State" section was citing `snapdragon-commons` and
-  `snapdragon-auth-core` as version "2.7.0" — confusing each consumer's own release
-  version with the `snapdragon-parent` 2.7.0 they depend on. Checked both repos'
-  actual `pom.xml` on `main`: `snapdragon-commons` is on its own 2.0.0 line (matching
-  this repo's `snapdragon-commons.version` pin) and `snapdragon-auth-core` is on its
+- New: this README's own "Current State" section was citing `hugmesh-commons` and
+  `hugmesh-auth-core` as version "2.8.0" — confusing each consumer's own release
+  version with the `hugmesh-parent` 2.8.0 they depend on. Checked both repos'
+  actual `pom.xml` on `main`: `hugmesh-commons` is on its own 2.1.0 line (matching
+  this repo's `hugmesh-commons.version` pin) and `hugmesh-auth-core` is on its
   own 2.3.4 line. Fixed the wording above to state each repo's real version and to
   call out the version-vs-parent-version distinction explicitly, since
-  `snapdragon-auth-core` hit this exact same mix-up in its own README (fixed there in
-  its PR #24, "commons dependency is 2.0.0, not 2.7.0").
+  `hugmesh-auth-core` hit this exact same mix-up in its own README (fixed there in
+  its PR #24, "commons dependency is 2.1.0, not 2.8.0").
 - Fixed one more real drift the previous pass's line-by-line check missed:
   `pom.xml:23`'s `<description>` still read `"(2.0.0 / Boot-4 line)"` — the
   literal text set when the artifact first moved to the Boot-4 baseline at
   version 2.0.0 — even though `<version>` (`pom.xml:20`) has since moved
-  through six releases to 2.7.0. Updated the description to `"2.7.0 / Boot-4
+  through six releases to 2.8.0. Updated the description to `"2.8.0 / Boot-4
   line"` to match the current `<version>` and the README's own phrasing.
 - `pom.xml`, `.gitlab-ci.yml`, and `settings.xml` were otherwise re-checked
   line-by-line against this README in this pass (2026-07-16) and match current
-  reality (version 2.7.0, Boot 4.0.7, Java 25, fail-mode analysers, H2 pins,
+  reality (version 2.8.0, Boot 4.0.7, Java 25, fail-mode analysers, H2 pins,
   testcontainers-bom 2.0.5). This metapom has no Java sources, so there is no dead
   code to remove here — dead-code/dead-doc sweeps on this repo reduce to keeping this
   file and the two config files in sync, which is what each pass in this section

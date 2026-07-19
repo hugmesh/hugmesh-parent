@@ -1,4 +1,4 @@
-# snapdragon-parent — publish the metapom to the GitLab Maven Package Registry.
+# hugmesh-parent — publish the metapom to the GitLab Maven Package Registry.
 #
 # The parent is packaging=pom, so there is nothing to compile or test; the pipeline
 # only deploys the POM artifact on the default branch / on a tag. Consumers (the BFF
