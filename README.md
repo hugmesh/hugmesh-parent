@@ -36,7 +36,8 @@ services target 2.8.0.
   `spring-boot-webflux-test` / `spring-boot-data-r2dbc-test`, and the Testcontainers
   integration-test infra `spring-boot-testcontainers` + testcontainers-postgresql/testcontainers-junit-jupiter/testcontainers-r2dbc).
 - **dependencyManagement:** the Spring Cloud `spring-cloud-dependencies` BOM (import),
-  `hugmesh-commons`, AWS SDK BOM (import), Resilience4j
+  `hugmesh-commons`, `hugmesh-build-config` (the resource-only ruleset jar consumed
+  by the analysis plugins below), AWS SDK BOM (import), Resilience4j
   (`resilience4j-spring-boot4` + `resilience4j-reactor`), SpringDoc, the
   Testcontainers BOM (import), plus deliberate **H2 pins** (`r2dbc-h2 1.0.0.RELEASE` /
   `h2 2.3.232`) that override Boot 4's managed versions, whose combination regressed
@@ -96,19 +97,29 @@ fails the build by design — an incomplete analysis must not report green.
 > (#4) and Checkstyle (#5), but was never true for SpotBugs (#6) — nothing was
 > gating it.
 
-**Scope: this gate is not a security scanner.** The include filter lists only the
-core-SpotBugs D/E patterns. FindSecBugs 1.14.0 ships 144 patterns
-(`SQL_INJECTION_*`, `COMMAND_INJECTION`, `HARD_CODE_PASSWORD`, …) and defines none
-of the `EI_EXPOSE_REP*`/`MS_*` names, so while the FindSecBugs plugin is loaded it
-contributes **zero** findings under the current include filter. It enforces
-defensive-copy / mutable-static conventions only. Widening that scope is a
-`hugmesh-build-config` change, tracked separately.
+**Scope.** Through build-config 0.3.0 the include filter listed only the
+core-SpotBugs D/E patterns, and FindSecBugs 1.14.0's 144 patterns
+(`SQL_INJECTION_*`, `COMMAND_INJECTION`, `HARD_CODE_PASSWORD`, …) share none of the
+`EI_EXPOSE_REP*`/`MS_*` names, so the loaded FindSecBugs plugin contributed **zero**
+findings — the gate enforced defensive-copy / mutable-static conventions only.
+Build-config 0.4.0 (pinned here as `hugmesh-build-config` **0.5.0** post-rebrand)
+re-scoped the include filter to admit the 137 FindSecBugs patterns empirically
+measured to fire zero findings fleet-wide (SQLi, path-traversal, hard-coded
+secrets, weak crypto, XXE, unsafe deserialization, SSRF, …), so the gate now
+**does** enforce those security conventions on all future code, at zero cost
+today. The 7 patterns that do fire fleet-wide (`SPRING_ENDPOINT`,
+`CRLF_INJECTION_LOGS`, `IMPROPER_UNICODE` + 4 triaged FPs) remain excluded on
+purpose; admitting them is tracked separately in `hugmesh-build-config`.
 
-`hugmesh/spotbugs-exclude.xml` is the entity/test/Spring-injection baseline. Note
-its Spring-injection suppression matches *layer* package names
-(`.controller`/`.service`/…) while the BFF fleet uses *feature* packages
-(`adminbff.announcement.AnnouncementService`), so that suppression does not
-currently fire — the dominant reason live violation counts are high.
+`hugmesh/spotbugs-exclude.xml` is the entity/test/Spring-injection baseline.
+Through build-config 0.3.0 its Spring-injection suppression matched *layer*
+package names (`.controller`/`.service`/…) while the BFF fleet uses *feature*
+packages (`adminbff.announcement.AnnouncementService`), so it never fired — the
+dominant reason live violation counts were high. Build-config 0.4.0 (pinned here
+as 0.5.0) switched the match to the class-name **suffix** instead, so the
+suppression fires for Spring constructor injection while still reporting
+genuinely mutable state (`byte[]`/`char[]` key material,
+`List`/`Map`/`Set`/`Collection`/`Date`) even inside a `*Service`.
 
 **Escape hatch.** `-Dhugmesh.analysis.skip=true` skips all three (e.g. a fast
 inner-loop build); default is `false`, so CI always runs them. To bump a ruleset, edit
@@ -180,10 +191,13 @@ the same machine can resolve it offline.
 ## Current State
 
 - On `main`, the metapom is fully on the **2.8.0 / Boot-4** baseline: Spring Boot
-  4.0.7, Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.1.0. PRs through #13
+  4.0.7, Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.1.0. PRs through #18
   are merged (Boot-4 migration, static-analysis fail-mode flips, testcontainers
-  baseline, TIER-A patch bumps, Java 25, testcontainers 2.x bump, plus three
-  documentation-accuracy passes and a readability/comment cleanup); there are no
+  baseline, TIER-A patch bumps, Java 25, testcontainers 2.x bump, three
+  documentation-accuracy passes and a readability/comment cleanup through #13,
+  plus #14's comprehensive docs refresh, #15 closing the SpotBugs fail-open gate,
+  #16 pinning `hugmesh-build-config` 0.4.0 for the SpotBugs FP fix, and #18's
+  HugMesh naming rebrand — `#17` was never opened against this repo); there are no
   outstanding feature branches.
 - This metapom carries **no application/auth code** — it only pins versions, shared
   starters, plugins, and publishing config. The org's shared security/tenancy code
@@ -250,16 +264,27 @@ platform evolves:
   call out the version-vs-parent-version distinction explicitly, since
   `hugmesh-auth-core` hit this exact same mix-up in its own README (fixed there in
   its PR #24, "commons dependency is 2.1.0, not 2.8.0").
-- Fixed one more real drift the previous pass's line-by-line check missed:
-  `pom.xml:23`'s `<description>` still read `"(2.0.0 / Boot-4 line)"` — the
-  literal text set when the artifact first moved to the Boot-4 baseline at
-  version 2.0.0 — even though `<version>` (`pom.xml:20`) has since moved
-  through six releases to 2.8.0. Updated the description to `"2.8.0 / Boot-4
-  line"` to match the current `<version>` and the README's own phrasing.
-- `pom.xml`, `.gitlab-ci.yml`, and `settings.xml` were otherwise re-checked
-  line-by-line against this README in this pass (2026-07-16) and match current
-  reality (version 2.8.0, Boot 4.0.7, Java 25, fail-mode analysers, H2 pins,
-  testcontainers-bom 2.0.5). This metapom has no Java sources, so there is no dead
-  code to remove here — dead-code/dead-doc sweeps on this repo reduce to keeping this
-  file and the two config files in sync, which is what each pass in this section
-  verifies.
+- A previous pass fixed a drift where `pom.xml:23`'s `<description>` still read
+  `"(2.0.0 / Boot-4 line)"` while `<version>` (`pom.xml:20`) had moved on, and
+  updated the description to `"2.8.0 / Boot-4 line"` to match. **Reopened
+  2026-07-22:** it has drifted again. `#18` (the HugMesh rebrand) bumped
+  `<version>` 2.7.0 → 2.8.0 but only swapped the description's brand word
+  (`Snapdragon` → `HugMesh`), not its version clause — `pom.xml:23` currently
+  still reads `"HugMesh ecosystem metapom (2.7.0 / Boot-4 line)"`, one release
+  behind. This free-text field has now drifted from `<version>` twice; it's a
+  one-line `pom.xml` fix, out of scope for this docs-only pass (`pom.xml` is a
+  build file, not a doc) — flagged here for a follow-up code PR.
+- **2026-07-22 pass:** naming was already fully HugMesh going in — `#18`
+  rebranded groupId/artifactId, plugin config, the `hugmesh-build-config`/
+  `hugmesh-commons` coordinates, and this README itself; a repo-wide grep for
+  "snapdragon" now returns zero hits, so there was nothing to change on that
+  front. Corrected two stale SpotBugs claims in the section above against the
+  current `pom.xml` plugin comments: the "FindSecBugs contributes zero findings"
+  line (build-config 0.4.0, pinned here as 0.5.0, already widened the include
+  filter to the 137 zero-finding patterns) and the "Spring-injection suppression
+  does not currently fire" line (0.4.0 switched the match to the class-name
+  suffix, so it fires now). Updated the "PRs through #13" line above to #18.
+  Reopened the `pom.xml:23` description drift above. `.gitlab-ci.yml` and
+  `settings.xml` were re-checked and still match (GitLab CI only, `CI_JOB_TOKEN`
+  via `settings.xml`, no `.github/workflows` in the tree). This metapom still has
+  no Java sources, so there is no dead code to remove here.
