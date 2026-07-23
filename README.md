@@ -204,7 +204,7 @@ the same machine can resolve it offline.
   lives in `hugmesh-commons` (`systems.hugmesh.commons.*`, its own release line
   is currently 2.1.0 — the same version this metapom pins in `dependencyManagement`),
   and the shared account/session/MFA/Casdoor-admin infrastructure lives in
-  `hugmesh-auth-core` (own release line currently 2.3.4, depends on commons and on
+  `hugmesh-auth-core` (own release line currently 2.4.0, depends on commons and on
   this parent 2.8.0; consumed by `user-bff` and `admin-bff`). Both are downstream
   consumers of this baseline (they parent off 2.8.0), not part of it — don't confuse
   their own artifact version with the 2.8.0 parent version they depend on.
@@ -288,3 +288,13 @@ platform evolves:
   `settings.xml` were re-checked and still match (GitLab CI only, `CI_JOB_TOKEN`
   via `settings.xml`, no `.github/workflows` in the tree). This metapom still has
   no Java sources, so there is no dead code to remove here.
+- **Independent-verification follow-up:** the "Current State" bullet's
+  `hugmesh-auth-core` version had also drifted, for the identical reason as the
+  `pom.xml:23` reopen above — auth-core's own rebrand PR (`#36`, merged the same
+  day as this repo's `#18`) bumped its `<version>` 2.3.4 → 2.4.0 alongside the
+  Snapdragon→HugMesh coordinate swap, so the "own release line currently 2.3.4"
+  claim was one release behind. Verified against `hugmesh-auth-core`'s actual
+  `pom.xml` on `main` and PR #36's diff; corrected that bullet to 2.4.0. Left the
+  2026-07-16 pass's log entry two bullets up ("own 2.3.4 line") as a historical
+  record — it was accurate as of that pass, three days before `#36` moved the
+  number.
