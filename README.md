@@ -191,20 +191,22 @@ the same machine can resolve it offline.
 ## Current State
 
 - On `main`, the metapom is fully on the **2.8.0 / Boot-4** baseline: Spring Boot
-  4.0.7, Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.1.0. PRs through #18
+  4.0.7, Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.1.0. PRs through #20
   are merged (Boot-4 migration, static-analysis fail-mode flips, testcontainers
   baseline, TIER-A patch bumps, Java 25, testcontainers 2.x bump, three
   documentation-accuracy passes and a readability/comment cleanup through #13,
   plus #14's comprehensive docs refresh, #15 closing the SpotBugs fail-open gate,
-  #16 pinning `hugmesh-build-config` 0.4.0 for the SpotBugs FP fix, and #18's
-  HugMesh naming rebrand — `#17` was never opened against this repo); there are no
-  outstanding feature branches.
+  #16 pinning `hugmesh-build-config` 0.4.0 for the SpotBugs FP fix, #18's HugMesh
+  naming rebrand, and #19/#20's HugMesh-naming + status/feature/diagram refresh
+  and auth-core version-claim fix — `#17` was never opened against this repo);
+  there are no outstanding feature branches (the remote branches for #8-#18 are
+  merged-but-undeleted, not active work).
 - This metapom carries **no application/auth code** — it only pins versions, shared
   starters, plugins, and publishing config. The org's shared security/tenancy code
   lives in `hugmesh-commons` (`systems.hugmesh.commons.*`, its own release line
   is currently 2.1.0 — the same version this metapom pins in `dependencyManagement`),
   and the shared account/session/MFA/Casdoor-admin infrastructure lives in
-  `hugmesh-auth-core` (own release line currently 2.4.0, depends on commons and on
+  `hugmesh-auth-core` (own release line currently 2.4.2, depends on commons and on
   this parent 2.8.0; consumed by `user-bff` and `admin-bff`). Both are downstream
   consumers of this baseline (they parent off 2.8.0), not part of it — don't confuse
   their own artifact version with the 2.8.0 parent version they depend on.
@@ -298,3 +300,17 @@ platform evolves:
   2026-07-16 pass's log entry two bullets up ("own 2.3.4 line") as a historical
   record — it was accurate as of that pass, three days before `#36` moved the
   number.
+- **2026-08-05 pass:** the "Current State" bullet's PR-count line still read
+  "PRs through #18" even though `#19` ("docs: HugMesh naming + status/feature/
+  diagram refresh") and `#20` ("docs: fix stale hugmesh-auth-core 2.3.4 version
+  claim (now 2.4.0)") were both already merged into `main` — the content of both
+  was already reflected in this section, just not the top-line counter. Bumped
+  it to #20 and folded their titles into the parenthetical. Also re-checked the
+  `hugmesh-auth-core` version claim this same "Current State" section makes one
+  bullet up: `#20` had corrected 2.3.4→2.4.0, but `hugmesh-auth-core` has since
+  shipped `#42` ("bump 2.4.1 → 2.4.2 to re-pin the coordinate after the MFA
+  fixes"), so 2.4.0 was one release behind again. Verified against
+  `hugmesh-auth-core`'s actual `pom.xml` on `main` and corrected the bullet to
+  2.4.2. The `pom.xml:23` description drift flagged below is unchanged (still a
+  build-file fix, out of scope for a docs-only pass) — re-checked, still reads
+  "2.7.0 / Boot-4 line" against a 2.8.0 `<version>`.
