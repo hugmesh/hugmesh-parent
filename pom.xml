@@ -94,7 +94,12 @@
       <!-- The hugmesh-commons shareable security/config/web library. Children
            add it as a plain compile dependency without a <version> (managed here). -->
       <dependency>
-        <groupId>systems.hugmesh</groupId>
+        <!-- net.hugmesh, NOT systems.hugmesh: hugmesh-commons declares its own
+             groupId since the .net domain move (hugmesh-commons fc6e559). This
+             managed entry is what every child resolves through, so while it named
+             the old coordinate, children that correctly asked for
+             net.hugmesh:hugmesh-commons still failed to resolve. -->
+        <groupId>net.hugmesh</groupId>
         <artifactId>hugmesh-commons</artifactId>
         <version>${hugmesh-commons.version}</version>
       </dependency>
