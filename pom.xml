@@ -15,7 +15,7 @@
     <relativePath/>
   </parent>
 
-  <groupId>systems.hugmesh</groupId>
+  <groupId>net.hugmesh</groupId>
   <artifactId>hugmesh-parent</artifactId>
   <version>2.8.0</version>
   <packaging>pom</packaging>
@@ -94,11 +94,11 @@
       <!-- The hugmesh-commons shareable security/config/web library. Children
            add it as a plain compile dependency without a <version> (managed here). -->
       <dependency>
-        <!-- net.hugmesh, NOT systems.hugmesh: hugmesh-commons declares its own
-             groupId since the .net domain move (hugmesh-commons fc6e559). This
-             managed entry is what every child resolves through, so while it named
-             the old coordinate, children that correctly asked for
-             net.hugmesh:hugmesh-commons still failed to resolve. -->
+        <!-- net.hugmesh: the org-wide Java/Maven coordinate (hugmesh.net
+             reversed). hugmesh-commons moved first (fc6e559); the rest of the
+             fleet — including this metapom's own groupId — followed. This managed
+             entry is what every child resolves through, so it must always name the
+             same coordinate the artifact actually publishes under. -->
         <groupId>net.hugmesh</groupId>
         <artifactId>hugmesh-commons</artifactId>
         <version>${hugmesh-commons.version}</version>
@@ -111,7 +111,7 @@
            hugmesh/*.xml (Checkstyle/SpotBugs) off its plugin classpath.
            Managed here so that plugin reference can omit the <version>. -->
       <dependency>
-        <groupId>systems.hugmesh</groupId>
+        <groupId>net.hugmesh</groupId>
         <artifactId>hugmesh-build-config</artifactId>
         <version>${hugmesh-build-config.version}</version>
       </dependency>
@@ -329,7 +329,7 @@
                this jar (maven-pmd-plugin uses a leading-slash classpath path, the
                same form as the bundled /category/java/*.xml rulesets). -->
           <dependency>
-            <groupId>systems.hugmesh</groupId>
+            <groupId>net.hugmesh</groupId>
             <artifactId>hugmesh-build-config</artifactId>
             <version>${hugmesh-build-config.version}</version>
           </dependency>
@@ -366,7 +366,7 @@
         <dependencies>
           <!-- Resolve hugmesh/checkstyle.xml from the build-config jar... -->
           <dependency>
-            <groupId>systems.hugmesh</groupId>
+            <groupId>net.hugmesh</groupId>
             <artifactId>hugmesh-build-config</artifactId>
             <version>${hugmesh-build-config.version}</version>
           </dependency>
@@ -463,7 +463,7 @@
           <!-- The include/exclude filter files live in the build-config jar; the
                spotbugs plugin reads them off its plugin classpath. -->
           <dependency>
-            <groupId>systems.hugmesh</groupId>
+            <groupId>net.hugmesh</groupId>
             <artifactId>hugmesh-build-config</artifactId>
             <version>${hugmesh-build-config.version}</version>
           </dependency>

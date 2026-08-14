@@ -8,7 +8,7 @@ config instead of copying them.
 ## Coordinates
 
 ```
-groupId:    systems.hugmesh
+groupId:    net.hugmesh
 artifactId: hugmesh-parent
 version:    2.8.0
 packaging:  pom
@@ -60,7 +60,7 @@ services target 2.8.0.
 
 Every Java repo that parents off this metapom automatically runs three analysers on
 `verify` — the child declares nothing. The curated rulesets are NOT in this repo; they
-ship in the resource-only **`systems.hugmesh:hugmesh-build-config`** jar and are
+ship in the resource-only **`net.hugmesh:hugmesh-build-config`** jar and are
 referenced on each plugin's own classpath (PMD `/hugmesh/*.xml`, Checkstyle/SpotBugs
 `hugmesh/*.xml`). That is the only mechanism by which a separate repo can see a
 ruleset that physically lives elsewhere, and it gives curated rules + automatic
@@ -156,7 +156,7 @@ those children to resolve.
 
 ```xml
 <parent>
-  <groupId>systems.hugmesh</groupId>
+  <groupId>net.hugmesh</groupId>
   <artifactId>hugmesh-parent</artifactId>
   <version>2.8.0</version>
   <relativePath/>
@@ -203,7 +203,7 @@ the same machine can resolve it offline.
   merged-but-undeleted, not active work).
 - This metapom carries **no application/auth code** — it only pins versions, shared
   starters, plugins, and publishing config. The org's shared security/tenancy code
-  lives in `hugmesh-commons` (`systems.hugmesh.commons.*`, its own release line
+  lives in `hugmesh-commons` (`net.hugmesh.commons.*`, its own release line
   is currently 2.1.0 — the same version this metapom pins in `dependencyManagement`),
   and the shared account/session/MFA/Casdoor-admin infrastructure lives in
   `hugmesh-auth-core` (own release line currently 2.4.2, depends on commons and on
