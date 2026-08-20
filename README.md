@@ -270,17 +270,16 @@ platform evolves:
   `"(2.0.0 / Boot-4 line)"` while `<version>` (`pom.xml:20`) had moved on, and
   updated the description to `"2.8.0 / Boot-4 line"` to match. **Reopened
   2026-07-22:** it has drifted again. `#18` (the HugMesh rebrand) bumped
-  `<version>` 2.7.0 → 2.8.0 but only swapped the description's brand word
-  (`Snapdragon` → `HugMesh`), not its version clause — `pom.xml:23` currently
+  `<version>` 2.7.0 → 2.8.0 but only swapped the description's brand word,
+  not its version clause — `pom.xml:23` currently
   still reads `"HugMesh ecosystem metapom (2.7.0 / Boot-4 line)"`, one release
   behind. This free-text field has now drifted from `<version>` twice; it's a
   one-line `pom.xml` fix, out of scope for this docs-only pass (`pom.xml` is a
   build file, not a doc) — flagged here for a follow-up code PR.
 - **2026-07-22 pass:** naming was already fully HugMesh going in — `#18`
   rebranded groupId/artifactId, plugin config, the `hugmesh-build-config`/
-  `hugmesh-commons` coordinates, and this README itself; a repo-wide grep for
-  "snapdragon" now returns zero hits, so there was nothing to change on that
-  front. Corrected two stale SpotBugs claims in the section above against the
+  `hugmesh-commons` coordinates, and this README itself, so there was nothing to
+  change on that front. Corrected two stale SpotBugs claims in the section above against the
   current `pom.xml` plugin comments: the "FindSecBugs contributes zero findings"
   line (build-config 0.4.0, pinned here as 0.5.0, already widened the include
   filter to the 137 zero-finding patterns) and the "Spring-injection suppression
@@ -294,7 +293,7 @@ platform evolves:
   `hugmesh-auth-core` version had also drifted, for the identical reason as the
   `pom.xml:23` reopen above — auth-core's own rebrand PR (`#36`, merged the same
   day as this repo's `#18`) bumped its `<version>` 2.3.4 → 2.4.0 alongside the
-  Snapdragon→HugMesh coordinate swap, so the "own release line currently 2.3.4"
+  rebrand coordinate swap, so the "own release line currently 2.3.4"
   claim was one release behind. Verified against `hugmesh-auth-core`'s actual
   `pom.xml` on `main` and PR #36's diff; corrected that bullet to 2.4.0. Left the
   2026-07-16 pass's log entry two bullets up ("own 2.3.4 line") as a historical
