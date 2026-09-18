@@ -53,6 +53,48 @@ is passed with `-s` by `release.yml` and by nothing else, so it reaches CI and n
 `-DaltDeploymentRepository=github::default::…` would upload with no credential, because the
 entry `actions/setup-java` generates into `~/.m2/settings.xml` is no longer being read.
 
+## Cross-repo package reads — the grant that going public does NOT perform
+
+This repo's release build resolves `net.hugmesh` artifacts published from **other**
+repositories (`hugmesh-build-config`, which this metapom puts on the PMD/Checkstyle/SpotBugs plugin classpaths). `secrets.GITHUB_TOKEN` is scoped to the repository whose
+workflow is running, and GitHub does not extend it across repositories for package reads:
+each upstream package must name this repository under **Manage Actions access** in its own
+package settings, or the build must present a token carrying `read:packages`.
+
+The first cut of this round wired every upstream `<server>` to `${env.GITHUB_TOKEN}`, and
+what makes that worse than an ordinary missing step is the **shape of its failure**. Maven
+reports it as `Could not resolve net.hugmesh:...`, which is the same string this file and
+the workflow comments teach a reader to read as *"the upstream is not published yet"*. The
+natural response — re-publish the upstream — burns a version, succeeds, and hits the same
+wall. So:
+
+- **The read credential is its own env var.** `.github/maven-ci-settings.xml` authenticates
+  the `github-hugmesh-*` upstream servers with `${env.UPSTREAM_PACKAGES_*}`, injected by
+  `release.yml` as `${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}`. The
+  `github` **deploy** server keeps the automatic `${env.GITHUB_TOKEN}` — a workflow may
+  always write packages for its own repository, so the deploy half needs no operator secret.
+- **A preflight step names the failure correctly.** Before maven runs, `release.yml` probes
+  each upstream's `maven-metadata.xml` with the exact credential maven will use, and tells
+  `401`/`403` (*cannot authenticate; NOT "unpublished"*) apart from `404` (*nothing published
+  there yet, **or** published and invisible to this credential — GitHub masks an unauthorised
+  read of a private package as 404*). Exercised against the live registry on 2026-09-18 with
+  an invalid credential: it emitted the `401` branch for every upstream and exited 1.
+
+**Neither of those grants anything.** On launch day the operator picks one of two routes,
+and **that decision has not been made**:
+
+- **Route A, no secret:** on each upstream package → *Package settings* → **Manage Actions
+  access** → add this repository. Only possible **after** that package exists, so it cannot
+  be set up ahead of a cold first publish.
+- **Route B, one secret, works cold:** a PAT with `read:packages` on the hugmesh org stored
+  as **`PACKAGES_READ_TOKEN`** (org secret, or a repo secret here). `release.yml` prefers it
+  and falls back to `GITHUB_TOKEN`. This is the route for a launch-day single-click publish.
+
+Full click list: `hugmesh-auth-core/RELEASING.md` §6.2. **Nothing here has been executed** —
+no Actions job in this org starts at all today (billing; `hugmesh-auth-core/RELEASING.md`
+§6.1), and no `PACKAGES_READ_TOKEN` exists (inferred — listing secrets needs org-admin and
+answers 403 from this box).
+
 ## Changed on 2026-09-17
 
 - `.github/maven-ci-settings.xml` added (CI-only; the whole resolution route).
