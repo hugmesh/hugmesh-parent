@@ -30,7 +30,7 @@ is no longer used: on `origin/main`, every repo that parents off `hugmesh-parent
   Security, OAuth2 Resource Server, Validation, Data-R2DBC + r2dbc-postgresql (runtime scope),
   Liquibase (+ `spring-boot-liquibase` runtime module — Boot 4 split
   `LiquibaseAutoConfiguration` out of the core autoconfigure umbrella, so without it
-  migrations silently never run), spring-jdbc, postgresql (runtime scope), SpringDoc
+  migrations silently never run), spring-jdbc, the `postgresql` JDBC driver (runtime scope), SpringDoc
   WebFlux UI; plus the test stack (spring-boot-starter-test, reactor-test,
   spring-security-test, r2dbc-h2, h2, the Boot-4 split test-slice modules
   `spring-boot-webflux-test` / `spring-boot-data-r2dbc-test`, and the Testcontainers
@@ -89,7 +89,9 @@ analysis errors *together* (its failure message is `failed with <N> bugs and <M>
 errors`); the plugin offers no way to separate them. An internal error therefore
 fails the build by design — an incomplete analysis must not report green.
 
-> **History — this gate was fail-open.** PR #6 moved SpotBugs to `spotbugs:check`
+> **History — this gate was fail-open.** (PR numbers in this note come from the
+> repo's earlier home, not from `hugmesh/hugmesh-parent`; commit `7d22f1a` is in
+> this repo's history.) PR #6 moved SpotBugs to `spotbugs:check`
 > and set `failOnViolation=true`, but that parameter does not exist on the goal
 > (Maven only logs `[WARNING] Parameter 'failOnViolation' is unknown`) and left
 > `failOnError=false` from the warn-first era. From `7d22f1a` until the flip to
@@ -174,8 +176,8 @@ configuration.
 The **gateway** (`hugmesh-gateway`) is on the same baseline this metapom targets
 (Spring Boot 4.0.7, Spring Cloud 2025.1.2, Java 25) but does not parent off it: its
 `pom.xml` names `spring-boot-starter-parent` directly, because this metapom is
-BFF-focused and would pull Liquibase, Testcontainers and R2DBC-Postgres onto a
-Cassandra-based gateway.
+BFF-focused and would add Liquibase and Testcontainers scaffolding the gateway does
+not use. The gateway declares its own Cassandra and R2DBC-Postgres starters.
 
 ## What stays per-repo
 
