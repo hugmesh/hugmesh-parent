@@ -244,6 +244,19 @@ plans, not shipped work:
 - Publish through GitLab CI (`CI_JOB_TOKEN`) and, once the repos can read each other's
   packages, through the manual GitHub Packages Release workflow.
 
+### Baseline drift check
+
+`scripts/check_baseline_drift.py` reads the Spring Boot parent version and the
+`spring-cloud.version` from this `pom.xml` and compares them with the `pom.xml` on
+`origin/main` of each consumer checkout next to this repo. It exits 1 on drift and 2
+when a checkout or ref cannot be read. Springdoc, Resilience4j, AWS SDK, Testcontainers
+and `hugmesh-commons` overrides that differ are printed as notes only.
+
+```sh
+python3 scripts/check_baseline_drift.py            # all known consumers
+python3 -m unittest discover -s scripts            # its tests
+```
+
 ## Known Gaps / TODO
 
 - `pom.xml:23`, the `<description>`, still reads `"HugMesh ecosystem metapom (2.7.0 /
