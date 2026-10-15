@@ -237,8 +237,10 @@ plans, not shipped work:
 - Keep the 2.8.0 line on the same Spring Boot / Spring Cloud train the gateways run,
   and bump shared versions (`hugmesh-commons`, SpringDoc, Resilience4j, Testcontainers,
   AWS SDK) in lockstep across consumers.
-- Add `hugmesh-auth-core` to `dependencyManagement` once enough consumers depend on it,
-  so `user-bff` and `admin-bff` can declare it without a `<version>`.
+- `hugmesh-auth-core` is now managed here (`hugmesh-auth-core.version`). Still to do:
+  `user-bff` and `admin-bff` drop their explicit `<version>` after moving to a parent
+  release that contains the entry; that needs a new parent version, which is a release
+  decision.
 - Retire the H2 pins when an upstream Boot-4 r2dbc-h2 release fixes the
   parameter-binding regression.
 - Publish through GitLab CI (`CI_JOB_TOKEN`) and, once the repos can read each other's
@@ -259,9 +261,6 @@ python3 -m unittest discover -s scripts            # its tests
 
 ## Known Gaps / TODO
 
-- `pom.xml:23`, the `<description>`, still reads `"HugMesh ecosystem metapom (2.7.0 /
-  Boot-4 line)"` while `<version>` (`pom.xml:20`) is 2.8.0. The field has drifted from
-  `<version>` twice. The fix is one line in `pom.xml`, left out of this docs-only change.
 - Nothing guards the Release workflow except review. It is `workflow_dispatch` only. A
   `push` trigger added later would republish an already-published, immutable
   coordinate (`RELEASING.md`).

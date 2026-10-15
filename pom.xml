@@ -20,7 +20,7 @@
   <version>2.8.0</version>
   <packaging>pom</packaging>
   <name>hugmesh-parent</name>
-  <description>HugMesh ecosystem metapom (2.7.0 / Boot-4 line): consolidates the
+  <description>HugMesh ecosystem metapom (Boot-4 line): consolidates the
     Spring Boot 4.0.7 / Spring Cloud 2025.1 / Java 25 reactive BFF baseline (WebFlux +
     Casdoor OAuth2 resource server + R2DBC/Liquibase + SpringDoc), shared
     dependencyManagement, pluginManagement, and GitLab Maven publishing.</description>
@@ -32,6 +32,11 @@
 
     <!-- Shared, hugmesh-pinned versions. -->
     <hugmesh-commons.version>2.1.0</hugmesh-commons.version>
+    <!-- hugmesh-auth-core is itself a child of this metapom, so this is a managed
+         version only (nothing here depends on it). Name a version auth-core has
+         published. user-bff and admin-bff still carry their own explicit
+         <version> until they move to a parent release that includes this entry. -->
+    <hugmesh-auth-core.version>2.5.1</hugmesh-auth-core.version>
     <!-- Spring Cloud release train for Boot 4.0.x (matches hugmesh-gateway). -->
     <spring-cloud.version>2025.1.2</spring-cloud.version>
     <!-- SpringDoc: Boot-4 / Spring Framework 7 compatible line (3.x). -->
@@ -102,6 +107,14 @@
         <groupId>net.hugmesh</groupId>
         <artifactId>hugmesh-commons</artifactId>
         <version>${hugmesh-commons.version}</version>
+      </dependency>
+
+      <!-- The shared stateful auth core (account/session store, MFA, session-cookie
+           and internal-token filters). Managed so consumers can omit the <version>. -->
+      <dependency>
+        <groupId>net.hugmesh</groupId>
+        <artifactId>hugmesh-auth-core</artifactId>
+        <version>${hugmesh-auth-core.version}</version>
       </dependency>
 
       <!-- The shared static-analysis ruleset jar (resource-only): carries the
