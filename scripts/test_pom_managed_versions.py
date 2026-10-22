@@ -10,6 +10,11 @@ import xml.etree.ElementTree as ET
 POM = pathlib.Path(__file__).resolve().parent.parent / "pom.xml"
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 
+# A published coordinate: MAJOR.MINOR.PATCH, or a beta of one
+# (MAJOR.MINOR.PATCH-beta.N, the org beta scheme of 2026-10-21; -rc.N is reserved). Never a
+# SNAPSHOT, a range, LATEST/RELEASE or a property reference.
+RELEASED = r"^\d+\.\d+\.\d+(-(beta|rc)\.[1-9]\d*)?$"
+
 
 def _root():
     return ET.parse(POM).getroot()
@@ -45,12 +50,32 @@ class AuthCoreManagedVersion(unittest.TestCase):
             "m:properties/m:hugmesh-auth-core.version", namespaces=NS
         )
         self.assertIsNotNone(value)
-        self.assertRegex(value, r"^\d+\.\d+\.\d+$")
+        self.assertRegex(value, RELEASED)
 
     def test_auth_core_is_managed_only_not_a_dependency_of_the_parent(self):
         direct = _root().findall("m:dependencies/m:dependency", NS)
         names = [d.findtext("m:artifactId", namespaces=NS) for d in direct]
         self.assertNotIn("hugmesh-auth-core", names)
+
+
+class PublishedVersions(unittest.TestCase):
+    """The metapom's own version and the net.hugmesh versions it pins are
+    coordinates a consumer resolves from a registry, so each must be a
+    release or a beta, never a SNAPSHOT."""
+
+    def test_own_version_is_a_release_or_a_beta(self):
+        self.assertRegex(_root().findtext("m:version", namespaces=NS), RELEASED)
+
+    def test_org_library_pins_are_releases_or_betas(self):
+        for prop in (
+            "hugmesh-build-config.version",
+            "hugmesh-commons.version",
+            "hugmesh-auth-core.version",
+        ):
+            with self.subTest(prop=prop):
+                value = _root().findtext(f"m:properties/m:{prop}", namespaces=NS)
+                self.assertIsNotNone(value)
+                self.assertRegex(value, RELEASED)
 
 
 class DescriptionMatchesVersion(unittest.TestCase):

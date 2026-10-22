@@ -1,45 +1,144 @@
-# Manual release: publish the net.hugmesh:hugmesh-parent metapom to GitHub Packages.
+# Release workflow: publish the net.hugmesh:hugmesh-parent metapom to GitHub Packages.
 #
-# workflow_dispatch ONLY. Switching this to `push: tags: ['v*']` would republish whatever
-# version pom.xml happens to hold over an already-published, immutable coordinate — the
-# failure mode that forced hugmesh-auth-core's 2.4.2 re-pin. Keep it manual.
+# WHAT PUBLISHES, AND WHEN (the beta scheme, 2026-10-21):
+#   push of a tag v<version>      -> mvn verify, mvn deploy to GitHub Packages,
+#                                    then a GitHub Release (prerelease, never
+#                                    "latest", while the version has a "-").
+#   workflow_dispatch on a v* tag -> the same thing; this is the re-run path.
+#   workflow_dispatch on main     -> mvn verify only. Nothing is deployed.
+#   anything else                 -> the version job refuses and nothing runs.
+# There is deliberately NO push-to-branch trigger and NO pull_request trigger. A Maven
+# coordinate is immutable: publishing on every merge would try to redeploy whatever
+# version pom.xml happens to hold over an already-published coordinate (the failure that
+# forced hugmesh-auth-core's 2.4.2 re-pin). Only a person pushing a tag decides that a
+# version is published. The tag must equal <version> in pom.xml with a leading "v", and it
+# must point at a commit that is on main. scripts/test_release_workflow.py pins this shape.
+#
+# WHERE IT RUNS: every job uses the same runs-on line. It picks the repository variable
+# RUNS_ON_PUBLISH (a JSON array such as ["self-hosted","Linux","X64"]) only for a non-PR
+# event on main or on a v*/studio-v* tag, and hosted ubuntu-latest in every other case,
+# including when the variable is unset. Deleting RUNS_ON_PUBLISH is the off switch that
+# sends publishing back to hosted runners. This line keeps OUR jobs off the local runner
+# for PRs; it is not a security boundary against fork PRs (a fork's PR runs the fork's
+# copy of the workflow file). The runner group settings are that boundary.
 #
 # LINK 2 OF 4. The chain is
-#   hugmesh-build-config 0.5.0 -> hugmesh-parent 2.8.0 -> hugmesh-commons 2.1.0
-#     -> hugmesh-auth-core 2.5.1
-# and hugmesh-auth-core/.github/workflows/release-chain.yml fires all four in that order
-# from a single trigger. Running THIS workflow before hugmesh-build-config 0.5.0 is
-# published fails at `verify`, on the analysers' ruleset jar, not at deploy.
+#   hugmesh-build-config 0.6.0-beta.1 -> hugmesh-parent 2.9.0-beta.1
+#     -> hugmesh-commons 2.2.0-beta.1 -> hugmesh-auth-core 2.6.0-beta.1
+# and hugmesh-auth-core/.github/workflows/release-chain.yml can fire all four in that
+# order; each link must be dispatched on its v* tag ref, or it only verifies. Running
+# THIS workflow before hugmesh-build-config 0.6.0-beta.1 is published fails at `verify`,
+# on the analysers' ruleset jar, not at deploy. The commons and auth-core versions in
+# pom.xml are dependencyManagement entries only: a pom-packaged parent does not resolve
+# them, so they do not have to exist when this link publishes.
 # See RELEASING.md in this repo and hugmesh-auth-core/RELEASING.md sections 3.2 and 6.
+
 name: Release
 
 on:
-  workflow_dispatch:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  version:
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/studio-v')) && vars.RUNS_ON_PUBLISH || '"ubuntu-latest"') }}
+    outputs:
+      version: ${{ steps.guard.outputs.version }}
+      kind: ${{ steps.guard.outputs.kind }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Version guard
+        id: guard
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import xml.etree.ElementTree as E; v = E.parse("pom.xml").getroot().find("{http://maven.apache.org/POM/4.0.0}version"); print(v.text.strip() if v is not None and v.text else "")')"
+          if [ -z "$version" ]; then
+            echo "::error::pom.xml has no <project><version>."
+            exit 1
+          fi
+          case "$version" in
+            *-SNAPSHOT)
+              echo "::error::pom.xml version $version is a SNAPSHOT; a published coordinate must be a release or a beta."
+              exit 1 ;;
+          esac
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::pom.xml version $version is not MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-beta.N."
+            exit 1
+          fi
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+                echo "::error::tag $GITHUB_REF_NAME does not match pom.xml version $version (expected tag v$version)."
+                exit 1
+              fi
+              if ! git merge-base --is-ancestor HEAD origin/main; then
+                echo "::error::tag $GITHUB_REF_NAME points at $(git rev-parse HEAD), which is not on main. Tag a commit on main."
+                exit 1
+              fi
+              kind=release ;;
+            refs/heads/main)
+              kind=main ;;
+            *)
+              echo "::error::Release runs only on main (verify) or on a v<version> tag (publish), not on $GITHUB_REF."
+              exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "Version $version, run kind: $kind"
+
+      - name: Repository checks (pom pins and this workflow's shape)
+        run: python3 -m unittest discover -s scripts -v
+
   publish:
-    runs-on: ubuntu-latest
+    needs: version
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/studio-v')) && vars.RUNS_ON_PUBLISH || '"ubuntu-latest"') }}
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           # 25, matching this metapom's own <java.version>. It was pinned to 21 until
           # 2026-09-17 on the reasoning that pom packaging does not compile; that is true of
           # this project's (absent) sources but not of the toolchain the bound analyser
-          # plugins load, and a metapom that publishes a Java 25 baseline from a Java 21
-          # runner is a discrepancy nobody had verified either way. Aligned rather than
-          # left as an open question.
+          # plugins load.
           java-version: '25'
-          # setup-java's generated ~/.m2/settings.xml is NOT what authenticates this build:
-          # every mvn call below passes `-s .github/maven-ci-settings.xml`, and `-s`
-          # replaces the user settings file. The servers that matter live in that file.
+          # Every mvn call below passes `-s .github/maven-ci-settings.xml`, and `-s`
+          # replaces the user settings file, so the settings setup-java generates are not
+          # what authenticates this build. They are written under runner.temp, not ~/.m2:
+          # on the self-hosted runner ~/.m2/settings.xml belongs to the operator.
           server-id: github
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
+          settings-path: ${{ runner.temp }}
+
+      # A fresh local Maven repository per run, under the runner's per-job temp directory.
+      # On the self-hosted runner ~/.m2/repository is the operator's own, and it can hold
+      # net.hugmesh artifacts installed by local builds that were never published. A
+      # verify that resolved hugmesh-build-config from there would pass here and then fail
+      # for every consumer. With this, the build sees only what the registries serve.
+      - name: Use a per-run local Maven repository
+        run: echo "MAVEN_REPO_LOCAL=$RUNNER_TEMP/m2-repository" >> "$GITHUB_ENV"
 
       # PREFLIGHT - CROSS-REPO PACKAGE READ. This step exists to stop ONE specific
       # misdiagnosis, and that is worth a whole step.
@@ -48,8 +147,10 @@ jobs:
       # repositories. secrets.GITHUB_TOKEN is scoped to THIS repository, and GitHub does not
       # hand it cross-repository package access automatically: the build must present a
       # token carrying read:packages, which is the PACKAGES_READ_TOKEN secret (a classic
-      # PAT with read:packages; decision 90a = B). If it is not set, maven fails with
-      #     Could not resolve net.hugmesh:hugmesh-parent:pom:2.8.0
+      # PAT with read:packages; decision 90a = B). Going public does not remove the need:
+      # GitHub Packages Maven needs a token to read even a public package. If it is not
+      # set, maven fails with
+      #     Could not resolve net.hugmesh:hugmesh-build-config:jar:0.6.0-beta.1
       # which is the SAME string this repo's RELEASING.md and the comments below teach a
       # reader to interpret as "the upstream is not published yet". A reader who believes
       # that goes and re-publishes an upstream that is already there, and hits the same wall.
@@ -59,8 +160,8 @@ jobs:
       # registry. It does NOT prove the exact version pinned in pom.xml exists - maven says
       # that, accurately, one step later.
       #
-      # NOT VERIFIED. No Actions job in this org has ever started (billing; RELEASING.md
-      # 6.1), so this preflight has never run either.
+      # The one run of this preflight (2026-10-07, run 37699571478) stopped on the 404
+      # branch with PACKAGES_READ_TOKEN unset.
       - name: Preflight - cross-repo package read
         env:
           UPSTREAM_PACKAGES_ACTOR: ${{ secrets.PACKAGES_READ_ACTOR || github.actor }}
@@ -101,13 +202,13 @@ jobs:
           exit ${rc}
 
       # -s .github/maven-ci-settings.xml is LOAD-BEARING: it is the only place
-      # net.hugmesh:hugmesh-build-config:0.5.0 can be resolved from. It is not a project
-      # dependency — it sits on the PMD/Checkstyle/SpotBugs PLUGIN classpaths, whose
+      # net.hugmesh:hugmesh-build-config can be resolved from. It is not a project
+      # dependency - it sits on the PMD/Checkstyle/SpotBugs PLUGIN classpaths, whose
       # executions are bound to `verify`, which runs before deploy even for pom packaging.
       # Deliberately not a <repositories> block in pom.xml: maven.pkg.github.com answers 401
       # to an unauthenticated GET, and this pom is the parent of the whole fleet.
-      - name: Publish to GitHub Packages
-        run: ./mvnw -B -ntp -s .github/maven-ci-settings.xml deploy -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }}
+      - name: Verify (the analysers load the build-config rulesets)
+        run: ./mvnw -B -ntp -s .github/maven-ci-settings.xml -Dmaven.repo.local="$MAVEN_REPO_LOCAL" verify
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -116,3 +217,38 @@ jobs:
           # unset; the preflight step above reports that case.
           UPSTREAM_PACKAGES_ACTOR: ${{ secrets.PACKAGES_READ_ACTOR || github.actor }}
           UPSTREAM_PACKAGES_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GitHub Packages
+        if: needs.version.outputs.kind == 'release'
+        run: ./mvnw -B -ntp -s .github/maven-ci-settings.xml -Dmaven.repo.local="$MAVEN_REPO_LOCAL" deploy -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_PACKAGES_ACTOR: ${{ secrets.PACKAGES_READ_ACTOR || github.actor }}
+          UPSTREAM_PACKAGES_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
+
+  github-release:
+    needs: [version, publish]
+    if: needs.version.outputs.kind == 'release'
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/studio-v')) && vars.RUNS_ON_PUBLISH || '"ubuntu-latest"') }}
+    permissions:
+      contents: write
+    steps:
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; leaving it as it is."
+            exit 0
+          fi
+          flags=(--verify-tag)
+          case "$VERSION" in
+            *-*) flags+=(--prerelease --latest=false) ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --title "hugmesh-parent $VERSION" \
+            --notes "Maven coordinate net.hugmesh:hugmesh-parent:$VERSION (pom), published to GitHub Packages (https://maven.pkg.github.com/hugmesh/hugmesh-parent)." \
+            "${flags[@]}"
