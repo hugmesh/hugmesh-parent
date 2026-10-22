@@ -9,19 +9,22 @@ set of starters, versions, plugins and publishing config instead of copying its 
 ```
 groupId:    net.hugmesh
 artifactId: hugmesh-parent
-version:    2.8.0
+version:    2.9.0-beta.1
 packaging:  pom
 ```
 
 Itself a child of `org.springframework.boot:spring-boot-starter-parent:4.0.7`.
 
-This is the **2.8.0 / Boot-4 line**. The legacy **1.0.0 / Spring Boot 3.5.5 line** is
-dead: on `origin/main`, every repo that parents off `hugmesh-parent` pins 2.8.0.
+This is the **2.x / Boot-4 line**. `2.9.0-beta.1` is its first beta under the org beta
+scheme (`MAJOR.MINOR.PATCH-beta.N`); consumers move from 2.8.0 to it in their own PRs. The
+legacy **1.0.0 / Spring Boot 3.5.5 line** is dead.
 
 ## What it provides
 
 - **Properties:** `java.version=25`, UTF-8 encoding, and pinned versions for
-  `hugmesh-commons` (2.1.0), the Spring Cloud release train (2025.1.2), SpringDoc
+  `hugmesh-commons` (2.2.0-beta.1), `hugmesh-auth-core` (2.6.0-beta.1, managed only),
+  `hugmesh-build-config` (0.6.0-beta.1, the analyser rulesets), the Spring Cloud release
+  train (2025.1.2), SpringDoc
   (3.0.3, the Boot-4 / Spring Framework 7 line), Resilience4j (2.4.0, the Boot-4
   starter line), and the AWS SDK BOM (2.28.3).
 - **Common dependencies** (inherited by every reactive BFF): WebFlux, Actuator,
@@ -100,7 +103,7 @@ D/E patterns. FindSecBugs 1.14.0's 144 patterns (`SQL_INJECTION_*`,
 `COMMAND_INJECTION`, `HARD_CODE_PASSWORD`, …) share none of the `EI_EXPOSE_REP*`/`MS_*`
 names, so the loaded FindSecBugs plugin contributed **zero** findings. The gate
 enforced defensive-copy and mutable-static conventions only.
-Build-config 0.4.0 (pinned here as `hugmesh-build-config` **0.5.0** after the rebrand)
+Build-config 0.4.0 (republished as 0.5.0 after the rebrand; pinned here as **0.6.0-beta.1**)
 widened the include filter to the 137 FindSecBugs patterns that measured zero findings
 fleet-wide (SQLi, path-traversal, hard-coded secrets, weak crypto, XXE, unsafe
 deserialization, SSRF, …). The gate now **does** enforce those security conventions on
@@ -113,7 +116,7 @@ positives) stay excluded on purpose. Admitting them is tracked in
 Through build-config 0.3.0 its Spring-injection suppression matched *layer* package
 names (`.controller`/`.service`/…), but the BFF fleet uses *feature* packages
 (`adminbff.announcement.AnnouncementService`). It never fired, which is the main
-reason live violation counts were high. Build-config 0.4.0 (pinned here as 0.5.0)
+reason live violation counts were high. Build-config 0.4.0 (now 0.6.0-beta.1 here)
 matches the class-name **suffix** instead. The suppression now fires for Spring
 constructor injection and still reports genuinely mutable state (`byte[]`/`char[]`
 key material, `List`/`Map`/`Set`/`Collection`/`Date`) even inside a `*Service`.
@@ -130,15 +133,15 @@ reactive-BFF child repo, plus the CI jobs that publish it:
 
 ```mermaid
 flowchart TD
-    SBSP["spring-boot-starter-parent<br/>4.0.7"] --> SP["hugmesh-parent 2.8.0<br/>(this repo, packaging=pom)"]
+    SBSP["spring-boot-starter-parent<br/>4.0.7"] --> SP["hugmesh-parent 2.9.0-beta.1<br/>(this repo, packaging=pom)"]
 
     SBC["hugmesh-build-config<br/>(PMD / Checkstyle / SpotBugs rulesets)"] -.->|"plugin classpath only,<br/>not a compile dependency"| SP
-    SC["hugmesh-commons 2.1.0"] -.->|"managed version"| SP
+    SC["hugmesh-commons 2.2.0-beta.1"] -.->|"managed version"| SP
 
     SP -->|"parent + inherited starters,<br/>test infra, analysis plugins"| BFF["Reactive BFF child repos<br/>(admin-bff-api, user-bff-api, mod-bff-api,<br/>federation-api, forum-bff-api, wiki-bff-api, ...)"]
 
     SP -->|"./mvnw deploy<br/>-s settings.xml"| REG[("GitLab Maven<br/>Package Registry")]
-    SP -.->|"manual Release workflow<br/>(release.yml)"| GHP[("GitHub Packages")]
+    SP -.->|"Release workflow on a v* tag<br/>(release.yml)"| GHP[("GitHub Packages")]
     REG -->|"resolved via CI_JOB_TOKEN<br/>or local ~/.m2 install"| BFF
 ```
 
@@ -148,7 +151,7 @@ above). `hugmesh-commons` is only *managed* here: a child still declares it to p
 in. The solid arrows are the real dependency and publish paths: `spring-boot-starter-parent`
 into this pom, this pom into every child BFF's effective POM, and the GitLab CI `deploy`
 stage publishing this artifact for those children. The dotted arrow to GitHub Packages
-is the manual `release.yml` workflow.
+is the tag-driven `release.yml` workflow.
 
 ## Using it in a service repo
 
@@ -156,7 +159,7 @@ is the manual `release.yml` workflow.
 <parent>
   <groupId>net.hugmesh</groupId>
   <artifactId>hugmesh-parent</artifactId>
-  <version>2.8.0</version>
+  <version>2.9.0-beta.1</version>
   <relativePath/>
 </parent>
 ```
@@ -184,35 +187,39 @@ branch or on a tag, via `./mvnw -B -ntp -s settings.xml deploy`. Authentication 
 GitLab-injected `CI_JOB_TOKEN` (a job-scoped, auto-expiring credential) read from
 `settings.xml` — **no secret is committed**.
 
-`.github/workflows/release.yml` is a second, **manual** route (`workflow_dispatch`
-only). It publishes the POM to GitHub Packages with `-s .github/maven-ci-settings.xml`.
-It is link 2 of 4 in the publish chain
-`hugmesh-build-config` 0.5.0 → `hugmesh-parent` 2.8.0 → `hugmesh-commons` 2.1.0 →
-`hugmesh-auth-core` 2.5.1; see `RELEASING.md`.
+`.github/workflows/release.yml` publishes the POM to GitHub Packages with
+`-s .github/maven-ci-settings.xml` when a person pushes a tag `v<version>` that equals the
+pom version (for example `v2.9.0-beta.1`), and creates a GitHub Release marked prerelease.
+A manual dispatch on that tag re-runs the publish; a dispatch on `main` only verifies. There
+is no publish on merge. It is link 2 of 4 in the publish chain
+`hugmesh-build-config` 0.6.0-beta.1 → `hugmesh-parent` 2.9.0-beta.1 →
+`hugmesh-commons` 2.2.0-beta.1 → `hugmesh-auth-core` 2.6.0-beta.1; see `RELEASING.md`.
 
 For local development, `./mvnw install` writes the POM to `~/.m2`, so sibling repos on
 the same machine resolve it offline.
 
 ## Current State
 
-- On `main`, the metapom is on the **2.8.0 / Boot-4** baseline: Spring Boot 4.0.7,
-  Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.1.0. The merged PRs on
+- The metapom is **2.9.0-beta.1** on the Boot-4 baseline: Spring Boot 4.0.7,
+  Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.2.0-beta.1. Consumers still pin
+  2.8.0 until their own beta PRs land, so `scripts/check_baseline_drift.py` reports them
+  as drift until then. The merged PRs on
   `hugmesh/hugmesh-parent` are #1, #3, #5, #6 and #7 (the last old-brand spellings, the
   CI-only GitHub Packages route, and the `PACKAGES_READ_TOKEN` release docs and
   preflight). Older PR numbers in the git history belong to the repo's earlier home.
   Every remote branch that still exists is merged. No feature branch is active.
-- The manual Release workflow has run once on this repo (2026-10-07, run 37699571478).
-  It failed at the preflight step: HTTP 404 reading `hugmesh-build-config` from GitHub
-  Packages, with `PACKAGES_READ_TOKEN` unset. Nothing has been published through it.
+- The Release workflow has run once on this repo (2026-10-07, run 37699571478, in its
+  earlier dispatch-only shape). It failed at the preflight step: HTTP 404 reading
+  `hugmesh-build-config` from GitHub Packages, with `PACKAGES_READ_TOKEN` unset. Nothing
+  has been published through it.
 - This metapom carries **no application or auth code**. It pins versions, shared
   starters, plugins and publishing config. The org's shared security and tenancy code
-  lives in `hugmesh-commons` (`net.hugmesh.commons.*`; its own release line is 2.1.0,
+  lives in `hugmesh-commons` (`net.hugmesh.commons.*`; its beta is 2.2.0-beta.1,
   the version this metapom pins in `dependencyManagement`). The shared
-  account/session/MFA/Casdoor-admin infrastructure lives in `hugmesh-auth-core` (own
-  release line 2.5.1; depends on commons and on this parent 2.8.0; consumed by
-  `user-bff` and `admin-bff`). Both are downstream of this baseline (they parent off
-  2.8.0), not part of it. Do not mistake their artifact versions for the 2.8.0 parent
-  version they depend on.
+  account/session/MFA/Casdoor-admin infrastructure lives in `hugmesh-auth-core` (beta
+  2.6.0-beta.1; depends on commons and on this parent; consumed by `user-bff` and
+  `admin-bff`). Both are downstream of this baseline (they parent off it), not part of
+  it. Do not mistake their artifact versions for the parent version they depend on.
 - Ecosystem auth model (context only; the consumer repos enforce it, not this one):
   Casdoor is the SSO IdP. `login-ui` renders a native username/password (+MFA) form and
   POSTs it to `/bff/login`. `user-bff` runs the PKCE/state handshake, the internal
@@ -234,7 +241,7 @@ the same machine resolve it offline.
 This repo is thin on purpose. Its roadmap is to **track the org baseline**. These are
 plans, not shipped work:
 
-- Keep the 2.8.0 line on the same Spring Boot / Spring Cloud train the gateways run,
+- Keep the 2.x line on the same Spring Boot / Spring Cloud train the gateways run,
   and bump shared versions (`hugmesh-commons`, SpringDoc, Resilience4j, Testcontainers,
   AWS SDK) in lockstep across consumers.
 - `hugmesh-auth-core` is now managed here (`hugmesh-auth-core.version`). Still to do:
@@ -261,8 +268,9 @@ python3 -m unittest discover -s scripts            # its tests
 
 ## Known Gaps / TODO
 
-- Nothing guards the Release workflow except review. It is `workflow_dispatch` only. A
-  `push` trigger added later would republish an already-published, immutable
-  coordinate (`RELEASING.md`).
+- The Release workflow publishes on a `v*` tag push only. `scripts/test_release_workflow.py`
+  fails if it gains a branch or `pull_request` trigger, deploys outside a tag run, or
+  stops using the publish runner line. It is a text check run by the workflow itself;
+  nothing runs it on pull requests (`RELEASING.md`).
 - The metapom has no Java sources, so there is no code or test of its own to check
   beyond `./mvnw validate`.

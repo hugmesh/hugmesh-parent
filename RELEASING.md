@@ -3,8 +3,56 @@
 `net.hugmesh:hugmesh-parent` is **link 2 of 4** in the org's Maven publish chain:
 
 ```
-hugmesh-build-config 0.5.0  ->  hugmesh-parent 2.8.0  ->  hugmesh-commons 2.1.0  ->  hugmesh-auth-core 2.5.1
+hugmesh-build-config 0.6.0-beta.1  ->  hugmesh-parent 2.9.0-beta.1  ->  hugmesh-commons 2.2.0-beta.1  ->  hugmesh-auth-core 2.6.0-beta.1
 ```
+
+## How a version is published (beta scheme, 2026-10-21)
+
+The version is **`2.9.0-beta.1`**: the org beta scheme (`MAJOR.MINOR.PATCH-beta.N`). 2.8.0 was
+pinned by every BFF, so the beta goes on the next minor line. N starts at 1 and goes up by
+one for each further beta of 2.9.0. Never a SNAPSHOT, never `+build` metadata.
+
+`.github/workflows/release.yml` publishes **only when a person pushes a tag** `v<version>`
+that equals `<version>` in `pom.xml` and points at a commit on `main`:
+
+| Event | What runs |
+|---|---|
+| push of tag `v2.9.0-beta.1` | version guard, repository checks, `verify`, `deploy` to GitHub Packages, then a GitHub Release marked prerelease and not latest |
+| `workflow_dispatch` on tag `v2.9.0-beta.1` | the same; this is the re-run path (an existing GitHub Release is left alone) |
+| `workflow_dispatch` on `main` | version guard, repository checks, `verify` only; nothing is deployed |
+| anything else | the version guard refuses |
+
+There is no push-to-branch trigger and no `pull_request` trigger: a Maven coordinate is
+immutable, so publish-on-merge would try to redeploy the same version.
+`scripts/test_release_workflow.py` pins that shape (and runs inside the workflow).
+
+**Before the tag:** `hugmesh-build-config` `v0.6.0-beta.1` must already be published. The
+analyser plugins load its ruleset jar during `verify`. Measured on 2026-10-21, offline, with
+that jar absent from the local repository:
+
+```
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-pmd-plugin:3.28.0:pmd (pmd) on project hugmesh-parent:
+  ... the artifact net.hugmesh:hugmesh-build-config:jar:0.6.0-beta.1 has not been downloaded from it before.
+```
+
+The `hugmesh-commons` and `hugmesh-auth-core` versions are `dependencyManagement` entries
+only. A `pom`-packaged parent does not resolve them, so they publish after this link.
+
+**Where it runs.** Every job's `runs-on` uses the repository variable `RUNS_ON_PUBLISH` (a
+JSON array such as `["self-hosted","Linux","X64"]`) for a non-PR event on `main` or a `v*`
+tag, and hosted `ubuntu-latest` otherwise, including when the variable is unset. Deleting
+`RUNS_ON_PUBLISH` sends publishing back to hosted runners. On the self-hosted runner the
+build uses a fresh local Maven repository under the job's temp directory, so a
+`net.hugmesh` artifact that was only installed locally can never satisfy `verify`.
+
+**To publish:**
+
+```
+git tag -a v2.9.0-beta.1 -m "hugmesh-parent 2.9.0-beta.1" <commit on main>
+git push origin v2.9.0-beta.1
+```
+
+Re-run on the same tag: `gh workflow run release.yml --repo hugmesh/hugmesh-parent --ref v2.9.0-beta.1`.
 
 The full story — why the chain exists, what a release IS in this org, and what the operator
 clicks on launch day — is in **`hugmesh-auth-core/RELEASING.md`**. This file is only what is
@@ -16,7 +64,7 @@ mechanism, the publish path is made real but unfired.
 
 Its own `<parent>` is `org.springframework.boot:spring-boot-starter-parent:4.0.7`, which is
 on Maven Central. The one `net.hugmesh` artifact it needs is
-**`net.hugmesh:hugmesh-build-config:0.5.0`**, and it needs it on a **plugin** classpath, not
+**`net.hugmesh:hugmesh-build-config:0.6.0-beta.1`**, and it needs it on a **plugin** classpath, not
 as a project dependency: `pom.xml`'s `maven-pmd-plugin`, `maven-checkstyle-plugin` and
 `spotbugs-maven-plugin` blocks each list it under the plugin's own `<dependencies>` so the
 analyser reads the curated ruleset off its plugin classloader.
@@ -127,18 +175,20 @@ $ ./mvnw -o -q -B -ntp -N -s .github/maven-ci-settings.xml help:evaluate -Dexpre
 
 ## What a human must still verify
 
-- **This workflow has never run.** `gh run list --repo hugmesh/hugmesh-parent` → empty.
-- **No Actions job in this org starts at all today**, so it could not have. The annotation on
+- **This workflow has run once** (2026-10-07, run 37699571478, the earlier dispatch-only
+  shape). It stopped at the preflight: HTTP 404 reading `hugmesh-build-config`, with
+  `PACKAGES_READ_TOKEN` unset. The tag-driven shape of 2026-10-21 has never run.
+- **Hosted Actions jobs in this org do not start while the repos are private.** The annotation on
   the most recent runs across the org is *"The job was not started because recent account
   payments have failed or your spending limit needs to be increased."* Private-repo Actions
   minutes are billed; public-repo minutes are free, so this dissolves when the repos go
   public. `hugmesh-auth-core/RELEASING.md` §6.1 has the exact `gh api` calls.
-- **There is no automated guard on this file.** `hugmesh-auth-core` pins the shape of its own
-  release workflow with `ReleaseMetadataGuardTest` (9 checks, mutation-tested). This repo is
-  `pom` packaging: it has no `compile`/`test` phase and therefore cannot run a JUnit guard at
-  all. The equivalent pin for this repo would have to live in `hugmesh-generator`'s shell
-  suite, which is outside the file set this change was allowed to touch. **Until that exists,
-  the only thing stopping this workflow gaining a `push` trigger is review.**
+- **The release workflow's shape is pinned by `scripts/test_release_workflow.py`** (since
+  2026-10-21): only `push` of `v*` tags and `workflow_dispatch`, no branch or
+  `pull_request` trigger, the publish runner line on every job, `deploy` only on a release
+  run, the tag-equals-version and tag-on-main checks, a prerelease that is never latest.
+  It runs locally with `python3 -m unittest discover -s scripts` and as a step of the
+  workflow's `version` job. It is a text check, so it cannot prove the workflow runs.
 - **Whether anything is already published is unknown, not "nothing".** Confirming needs a
   token with `read:packages`; this box's has none
   (`gh api /orgs/hugmesh/packages?package_type=maven` → HTTP 403).
