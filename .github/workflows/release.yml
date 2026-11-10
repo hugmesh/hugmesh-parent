@@ -1,21 +1,39 @@
 # Release workflow: publish the net.hugmesh:hugmesh-parent metapom to GitHub Packages.
 #
-# WHAT PUBLISHES, AND WHEN (the beta scheme, 2026-10-21):
-#   push of a tag v<version>      -> mvn verify, mvn deploy to GitHub Packages,
-#                                    a cosign keyless signature and a GitHub
-#                                    build-provenance attestation over the
-#                                    published pom, then a GitHub Release
-#                                    (with SHA256SUMS + signature; prerelease, never
-#                                    "latest", while the version has a "-").
-#   workflow_dispatch on a v* tag -> the same thing; this is the re-run path.
-#   workflow_dispatch on main     -> mvn verify only. Nothing is deployed.
-#   anything else                 -> the version job refuses and nothing runs.
-# There is deliberately NO push-to-branch trigger and NO pull_request trigger. A Maven
+# hugmesh-release-channels: beta+stable
+# WHAT PUBLISHES, AND WHEN. The TAG decides the channel; scripts/release-channel.sh
+# holds the branch rules and scripts/test-release-channel.sh tests them (the version
+# job runs it first):
+#   push of tag vX.Y.Z-beta.N     -> BETA. The commit must be on main. mvn verify,
+#                                    mvn deploy to GitHub Packages, a cosign keyless
+#                                    signature and a GitHub build-provenance
+#                                    attestation over the published pom, then a GitHub
+#                                    Release (with SHA256SUMS + signature) marked
+#                                    prerelease and never Latest.
+#   push of tag vX.Y.Z            -> STABLE. The commit must be on release/X.Y, and no
+#                                    higher vX.Y.W may exist. The same publish, then a
+#                                    full GitHub Release, marked Latest only when X.Y is
+#                                    the newest stable line (a patch on an older line
+#                                    is not Latest; decided again right before the
+#                                    Release is created).
+#   push to release/X.Y           -> mvn verify only, nothing is deployed. pom.xml must
+#                                    be X.Y.*. This is the green branch run the org
+#                                    release script (hugmesh-generator
+#                                    scripts/release.sh --channel stable) requires
+#                                    before it tags release/X.Y.
+#   workflow_dispatch on a v* tag -> the same as the tag push; the re-run path.
+#   workflow_dispatch on main or
+#   on release/X.Y                -> mvn verify only. Nothing is deployed.
+#   anything else (-rc.N tags,
+#   other branches)               -> the version job refuses and nothing runs.
+# There is deliberately NO push trigger on main and NO pull_request trigger. A Maven
 # coordinate is immutable: publishing on every merge would try to redeploy whatever
 # version pom.xml happens to hold over an already-published coordinate (the failure that
 # forced hugmesh-auth-core's 2.4.2 re-pin). Only a person pushing a tag decides that a
-# version is published. The tag must equal <version> in pom.xml with a leading "v", and it
-# must point at a commit that is on main. scripts/test_release_workflow.py pins this shape.
+# version is published; a release/X.Y push only verifies (every deploy, signing and
+# release step is gated on kind == 'release', which only a tag gets). The tag must equal
+# <version> in pom.xml with a leading "v". scripts/test_release_workflow.py and
+# scripts/test-release-channel.sh pin this shape.
 #
 # WHERE IT RUNS: every job uses the same runs-on line. It picks the repository variable
 # RUNS_ON_PUBLISH (a JSON array such as ["self-hosted","Linux","X64"]) only for a non-PR
@@ -40,6 +58,7 @@ name: Release
 
 on:
   push:
+    branches: ['release/**']
     tags: ['v*']
   workflow_dispatch: {}
 
@@ -56,6 +75,7 @@ jobs:
     outputs:
       version: ${{ steps.guard.outputs.version }}
       kind: ${{ steps.guard.outputs.kind }}
+      channel: ${{ steps.channel.outputs.channel }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -63,6 +83,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Self-test the release channel rules
+        run: bash scripts/test-release-channel.sh
+
+      # Reads only env vars and pom.xml: scripts/test-release-channel.sh runs this exact
+      # script with a table of refs and versions, so keep ${{ }} out of it.
       - name: Version guard
         id: guard
         run: |
@@ -87,20 +112,36 @@ jobs:
                 echo "::error::tag $GITHUB_REF_NAME does not match pom.xml version $version (expected tag v$version)."
                 exit 1
               fi
-              if ! git merge-base --is-ancestor HEAD origin/main; then
-                echo "::error::tag $GITHUB_REF_NAME points at $(git rev-parse HEAD), which is not on main. Tag a commit on main."
-                exit 1
-              fi
               kind=release ;;
             refs/heads/main)
               kind=main ;;
+            refs/heads/release/*)
+              if ! [[ "${GITHUB_REF#refs/heads/}" =~ ^release/([0-9]+)\.([0-9]+)$ ]]; then
+                echo "::error::${GITHUB_REF#refs/heads/} is not named release/X.Y. Nothing runs."
+                exit 1
+              fi
+              case "$version" in
+                "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}".*) ;;
+                *)
+                  echo "::error::pom.xml version $version is not on the ${BASH_REMATCH[1]}.${BASH_REMATCH[2]} line, but this is ${GITHUB_REF#refs/heads/}."
+                  exit 1 ;;
+              esac
+              kind=branch ;;
             *)
-              echo "::error::Release runs only on main (verify) or on a v<version> tag (publish), not on $GITHUB_REF."
+              echo "::error::Release runs only on main or release/X.Y (verify) or on a v<version> tag (publish), not on $GITHUB_REF."
               exit 1 ;;
           esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
           echo "Version $version, run kind: $kind"
+
+      # The channel and the branch rules: a vX.Y.Z-beta.N tag must be on main, a stable
+      # vX.Y.Z on release/X.Y with no higher vX.Y.W. Refuses before anything is built.
+      - name: Decide the release channel
+        id: channel
+        env:
+          VERSION: ${{ steps.guard.outputs.version }}
+        run: bash scripts/release-channel.sh
 
       - name: Repository checks (pom pins and this workflow's shape)
         run: python3 -m unittest discover -s scripts -v
@@ -302,6 +343,21 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Asked again here, not read from the version job: a newer stable may have been
+      # published since that job ran (or since the run being re-run), and then this one
+      # must not be marked Latest.
+      - name: Decide again whether this release is Latest
+        id: channel
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash scripts/release-channel.sh
+
       - name: Fetch SHA256SUMS and its signature from the publish job
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
@@ -312,6 +368,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
+          LATEST: ${{ steps.channel.outputs.latest }}
         run: |
           set -euo pipefail
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -321,6 +378,8 @@ jobs:
           flags=(--verify-tag)
           case "$VERSION" in
             *-*) flags+=(--prerelease --latest=false) ;;
+            *)
+              if [ "${LATEST:-}" = true ]; then flags+=(--latest); else flags+=(--latest=false); fi ;;
           esac
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
             --title "hugmesh-parent $VERSION" \

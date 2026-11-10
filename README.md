@@ -189,9 +189,10 @@ GitLab-injected `CI_JOB_TOKEN` (a job-scoped, auto-expiring credential) read fro
 
 `.github/workflows/release.yml` publishes the POM to GitHub Packages with
 `-s .github/maven-ci-settings.xml` when a person pushes a tag `v<version>` that equals the
-pom version (for example `v2.9.0-beta.1`), and creates a GitHub Release marked prerelease.
-A manual dispatch on that tag re-runs the publish; a dispatch on `main` only verifies. There
-is no publish on merge. It is link 2 of 4 in the publish chain
+pom version: a beta `vX.Y.Z-beta.N` on a commit on `main` gets a GitHub Release marked
+prerelease, a stable `vX.Y.Z` on a commit on `release/X.Y` a full one (Latest only on the
+newest stable line). A manual dispatch on that tag re-runs the publish; a dispatch on
+`main`, and a push to `release/X.Y`, only verify. There is no publish on merge. It is link 2 of 4 in the publish chain
 `hugmesh-build-config` 0.6.0-beta.1 → `hugmesh-parent` 2.9.0-beta.1 →
 `hugmesh-commons` 2.2.0-beta.1 → `hugmesh-auth-core` 2.6.0-beta.1; see `RELEASING.md`.
 

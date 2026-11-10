@@ -93,10 +93,20 @@ class Triggers(unittest.TestCase):
                 if not ln.startswith(("tags", "-", "branches", "paths"))]
         self.assertEqual(sorted(keys), ["push", "workflow_dispatch"])
 
-    def test_push_is_tags_v_only_never_a_branch(self):
+    def test_push_is_v_tags_and_release_branches_only(self):
+        # Stable channel: a release/X.Y push runs verify only (the deploy is gated on
+        # kind == 'release', below). main, '**', paths or *-ignore filters would let a
+        # merge start a run, so the only branch filter allowed is exactly release/**.
         self.assertIn("tags: ['v*']", self.on)
+        branches = [ln for ln in self.on if ln.startswith("branches")]
+        self.assertEqual(branches, ["branches: ['release/**']"])
         for line in self.on:
-            self.assertFalse(line.startswith("branches"), line)
+            self.assertFalse(line.startswith(("paths", "branches-ignore", "tags-ignore")), line)
+
+    def test_stable_channel_marker_for_the_org_release_script(self):
+        # hugmesh-generator scripts/release.sh --channel stable refuses this repo
+        # unless release.yml carries this literal line next to the release/** trigger.
+        self.assertIn("# hugmesh-release-channels: beta+stable", _lines())
 
     def test_no_pull_request_trigger(self):
         text = "\n".join(self.on)
@@ -122,13 +132,24 @@ class Publishing(unittest.TestCase):
     def setUp(self):
         self.jobs = _jobs(_lines())
 
-    def test_version_guard_ties_the_tag_to_the_pom_and_to_main(self):
+    def test_version_guard_ties_the_tag_to_the_pom_and_to_its_branch(self):
         text = "\n".join(self.jobs["version"])
         self.assertIn('"${GITHUB_REF_NAME#v}" != "$version"', text)
-        self.assertIn("git merge-base --is-ancestor HEAD origin/main", text)
         self.assertIn("*-SNAPSHOT)", text)
         self.assertIn("kind=release", text)
         self.assertIn("kind=main", text)
+        self.assertIn("kind=branch", text)
+        # The branch rules (beta tag on main, stable tag on release/X.Y) live in
+        # scripts/release-channel.sh; its self-test runs before the guard.
+        steps = ["\n".join(s) for s in _steps_of(self.jobs["version"])]
+        runs = [i for i, s in enumerate(steps) if "run: bash scripts/test-release-channel.sh" in s]
+        guard = [i for i, s in enumerate(steps) if "id: guard" in s]
+        channel = [i for i, s in enumerate(steps) if "run: bash scripts/release-channel.sh" in s]
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(len(guard), 1)
+        self.assertEqual(len(channel), 1)
+        self.assertLess(runs[0], guard[0])
+        self.assertLess(guard[0], channel[0])
 
     def test_deploy_runs_only_on_a_release_run(self):
         deploys = [s for s in _steps_of(self.jobs["publish"])
@@ -155,6 +176,16 @@ class Publishing(unittest.TestCase):
                       [ln.strip() for ln in body])
         self.assertIn("flags+=(--prerelease --latest=false)", text)
         self.assertIn("--verify-tag", text)
+
+    def test_a_stable_is_latest_only_on_a_fresh_answer(self):
+        body = self.jobs["github-release"]
+        text = "\n".join(body)
+        self.assertIn('if [ "${LATEST:-}" = true ]; then flags+=(--latest); '
+                      'else flags+=(--latest=false); fi', text)
+        self.assertIn("LATEST: ${{ steps.channel.outputs.latest }}", text)
+        self.assertLess(text.index("run: bash scripts/release-channel.sh"),
+                        text.index("gh release create"))
+        self.assertNotIn("needs.version.outputs.latest", WORKFLOW.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
