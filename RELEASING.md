@@ -13,18 +13,21 @@ pinned by every BFF, so the beta goes on the next minor line. N starts at 1 and 
 one for each further beta of 2.9.0. Never a SNAPSHOT, never `+build` metadata.
 
 `.github/workflows/release.yml` publishes **only when a person pushes a tag** `v<version>`
-that equals `<version>` in `pom.xml` and points at a commit on `main`:
+that equals `<version>` in `pom.xml`: a beta `vX.Y.Z-beta.N` on a commit on `main`, a stable
+`vX.Y.Z` on a commit on `release/X.Y` ("Release channels" below):
 
 | Event | What runs |
 |---|---|
-| push of tag `v2.9.0-beta.1` | version guard, repository checks, `verify`, `deploy` to GitHub Packages, then a GitHub Release marked prerelease and not latest |
-| `workflow_dispatch` on tag `v2.9.0-beta.1` | the same; this is the re-run path (an existing GitHub Release is left alone) |
-| `workflow_dispatch` on `main` | version guard, repository checks, `verify` only; nothing is deployed |
-| anything else | the version guard refuses |
+| push of tag `vX.Y.Z-beta.N` (commit on `main`) | version guard, repository checks, `verify`, `deploy` to GitHub Packages, then a GitHub Release marked prerelease and not latest |
+| push of tag `vX.Y.Z` (commit on `release/X.Y`) | the same, then a full GitHub Release, Latest only on the newest stable line |
+| `workflow_dispatch` on a `v*` tag | the same as its push; this is the re-run path (an existing GitHub Release is left alone) |
+| push to `release/X.Y`, `workflow_dispatch` on `main` or `release/X.Y` | version guard, repository checks, `verify` only; nothing is deployed |
+| anything else | the version job refuses |
 
-There is no push-to-branch trigger and no `pull_request` trigger: a Maven coordinate is
+There is no push trigger on `main` and no `pull_request` trigger: a Maven coordinate is
 immutable, so publish-on-merge would try to redeploy the same version.
-`scripts/test_release_workflow.py` pins that shape (and runs inside the workflow).
+`scripts/test_release_workflow.py` and `scripts/test-release-channel.sh` pin that shape (and
+both run inside the workflow).
 
 **Before the tag:** `hugmesh-build-config` `v0.6.0-beta.1` must already be published. The
 analyser plugins load its ruleset jar during `verify`. Measured on 2026-10-21, offline, with
@@ -45,14 +48,57 @@ tag, and hosted `ubuntu-latest` otherwise, including when the variable is unset.
 build uses a fresh local Maven repository under the job's temp directory, so a
 `net.hugmesh` artifact that was only installed locally can never satisfy `verify`.
 
-**To publish:**
+**To publish by hand** (the org release script below does this for you):
 
 ```
-git tag -a v2.9.0-beta.1 -m "hugmesh-parent 2.9.0-beta.1" <commit on main>
-git push origin v2.9.0-beta.1
+git tag -a v<version> -m "hugmesh-parent <version>" <commit on main, or on release/X.Y for a stable>
+git push origin v<version>
 ```
 
-Re-run on the same tag: `gh workflow run release.yml --repo hugmesh/hugmesh-parent --ref v2.9.0-beta.1`.
+Re-run on the same tag: `gh workflow run release.yml --repo hugmesh/hugmesh-parent --ref v<version>`.
+
+## Release channels: beta from `main`, stable from `release/X.Y`
+
+The tag decides the channel. `.github/workflows/release.yml` carries the marker
+`hugmesh-release-channels: beta+stable` that the org release script looks for;
+`scripts/release-channel.sh` holds the branch rules, and `scripts/test-release-channel.sh`
+tests them, the workflow's own version guard and its `gh release create` step. The version
+job runs that test first, so a broken rule fails the run before anything is built.
+
+| Ref | Channel | What the run does |
+|---|---|---|
+| tag `vX.Y.Z-beta.N`, commit on `main` | beta | verify, deploy, sign, GitHub Release marked prerelease, never Latest |
+| tag `vX.Y.Z`, commit on `release/X.Y` | stable | verify, deploy, sign, full GitHub Release, marked Latest only when `X.Y` is the newest stable line (decided again right before the Release is created, so a re-run never marks an older line Latest) |
+| push to `release/X.Y` | none | `verify` only, nothing deployed; `pom.xml` must be `X.Y.*`. The org release script requires this run to be green before it tags `release/X.Y` |
+| `workflow_dispatch` on `main` or `release/X.Y` | none | `verify` only |
+| `workflow_dispatch` on a `v*` tag | as the tag | the re-run path; an existing GitHub Release is left alone |
+| anything else | refused | an `-rc.N` tag, a beta tag off `main`, a stable tag off its own `release/X.Y`, a stable older than a published `vX.Y.W`, a branch not named `release/X.Y`, a tag that is not `v` + the pom version |
+
+There is still no push trigger on `main` and no `pull_request` trigger. A `release/X.Y`
+push only verifies: every deploy, signing and GitHub Release step is gated on
+`kind == 'release'`, which only a matching `v*` tag gets. A published coordinate is
+immutable, so a stable fix goes out as the next patch, never over an existing version.
+A `release/X.Y` run always lands on hosted `ubuntu-latest`: the `RUNS_ON_PUBLISH`
+expression names only `main` and `v*` tags.
+
+### One command
+
+Releases are driven from `hugmesh-generator` (`docs/RELEASING.md` there). It reads this
+repo's version from `pom.xml` (its row in `scripts/release/repos.tsv`), so no version is
+typed for a beta or a stable cut. Every command below is a dry run until `--apply` is added.
+
+```
+scripts/release.sh                                   # beta: tag main's X.Y.Z-beta.N, whole org
+scripts/release.sh --only hugmesh-parent                # beta of this repo only
+scripts/release.sh --channel stable                  # stable cut: release/X.Y from main, X.Y.Z there
+scripts/release.sh --channel stable --version X.Y.Z --only hugmesh-parent
+                                                     # a patch on the existing release/X.Y
+```
+
+A new minor needs no edit to the workflow or the tests: bump `<version>` in `pom.xml` in a
+PR (the tests derive their fixture versions from it), merge, then run the command. A patch
+is: cherry-pick the fix onto `release/X.Y`, then the `--version X.Y.(Z+1)` command, which
+opens the version-bump PR into `release/X.Y`, waits for its green push run, and tags.
 
 The full story — why the chain exists, what a release IS in this org, and what the operator
 clicks on launch day — is in **`hugmesh-auth-core/RELEASING.md`**. This file is only what is
