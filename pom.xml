@@ -17,7 +17,7 @@
 
   <groupId>net.hugmesh</groupId>
   <artifactId>hugmesh-parent</artifactId>
-  <version>2.10.0-beta.1</version>
+  <version>2.10.0-beta.2</version>
   <packaging>pom</packaging>
   <name>hugmesh-parent</name>
   <description>HugMesh ecosystem metapom (Boot-4 line): consolidates the
