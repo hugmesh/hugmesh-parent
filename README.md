@@ -9,7 +9,7 @@ set of starters, versions, plugins and publishing config instead of copying its 
 ```
 groupId:    net.hugmesh
 artifactId: hugmesh-parent
-version:    2.9.0-beta.1
+version:    2.10.0-beta.1
 packaging:  pom
 ```
 
@@ -22,8 +22,8 @@ legacy **1.0.0 / Spring Boot 3.5.5 line** is dead.
 ## What it provides
 
 - **Properties:** `java.version=25`, UTF-8 encoding, and pinned versions for
-  `hugmesh-commons` (2.2.0-beta.1), `hugmesh-auth-core` (2.6.0-beta.1, managed only),
-  `hugmesh-build-config` (0.6.0-beta.1, the analyser rulesets), the Spring Cloud release
+  `hugmesh-commons` (2.3.0-beta.1), `hugmesh-auth-core` (2.7.0-beta.1, managed only),
+  `hugmesh-build-config` (0.7.0-beta.1, the analyser rulesets), the Spring Cloud release
   train (2025.1.2), SpringDoc
   (3.0.3, the Boot-4 / Spring Framework 7 line), Resilience4j (2.4.0, the Boot-4
   starter line), and the AWS SDK BOM (2.28.3).
@@ -103,7 +103,7 @@ D/E patterns. FindSecBugs 1.14.0's 144 patterns (`SQL_INJECTION_*`,
 `COMMAND_INJECTION`, `HARD_CODE_PASSWORD`, …) share none of the `EI_EXPOSE_REP*`/`MS_*`
 names, so the loaded FindSecBugs plugin contributed **zero** findings. The gate
 enforced defensive-copy and mutable-static conventions only.
-Build-config 0.4.0 (republished as 0.5.0 after the rebrand; pinned here as **0.6.0-beta.1**)
+Build-config 0.4.0 (republished as 0.5.0 after the rebrand; pinned here as **0.7.0-beta.1**)
 widened the include filter to the 137 FindSecBugs patterns that measured zero findings
 fleet-wide (SQLi, path-traversal, hard-coded secrets, weak crypto, XXE, unsafe
 deserialization, SSRF, …). The gate now **does** enforce those security conventions on
@@ -116,7 +116,7 @@ positives) stay excluded on purpose. Admitting them is tracked in
 Through build-config 0.3.0 its Spring-injection suppression matched *layer* package
 names (`.controller`/`.service`/…), but the BFF fleet uses *feature* packages
 (`adminbff.announcement.AnnouncementService`). It never fired, which is the main
-reason live violation counts were high. Build-config 0.4.0 (now 0.6.0-beta.1 here)
+reason live violation counts were high. Build-config 0.4.0 (now 0.7.0-beta.1 here)
 matches the class-name **suffix** instead. The suppression now fires for Spring
 constructor injection and still reports genuinely mutable state (`byte[]`/`char[]`
 key material, `List`/`Map`/`Set`/`Collection`/`Date`) even inside a `*Service`.
@@ -133,10 +133,10 @@ reactive-BFF child repo, plus the CI jobs that publish it:
 
 ```mermaid
 flowchart TD
-    SBSP["spring-boot-starter-parent<br/>4.0.7"] --> SP["hugmesh-parent 2.9.0-beta.1<br/>(this repo, packaging=pom)"]
+    SBSP["spring-boot-starter-parent<br/>4.0.7"] --> SP["hugmesh-parent 2.10.0-beta.1<br/>(this repo, packaging=pom)"]
 
     SBC["hugmesh-build-config<br/>(PMD / Checkstyle / SpotBugs rulesets)"] -.->|"plugin classpath only,<br/>not a compile dependency"| SP
-    SC["hugmesh-commons 2.2.0-beta.1"] -.->|"managed version"| SP
+    SC["hugmesh-commons 2.3.0-beta.1"] -.->|"managed version"| SP
 
     SP -->|"parent + inherited starters,<br/>test infra, analysis plugins"| BFF["Reactive BFF child repos<br/>(admin-bff-api, user-bff-api, mod-bff-api,<br/>federation-api, forum-bff-api, wiki-bff-api, ...)"]
 
@@ -159,7 +159,7 @@ is the tag-driven `release.yml` workflow.
 <parent>
   <groupId>net.hugmesh</groupId>
   <artifactId>hugmesh-parent</artifactId>
-  <version>2.9.0-beta.1</version>
+  <version>2.10.0-beta.1</version>
   <relativePath/>
 </parent>
 ```
@@ -193,32 +193,29 @@ pom version: a beta `vX.Y.Z-beta.N` on a commit on `main` gets a GitHub Release 
 prerelease, a stable `vX.Y.Z` on a commit on `release/X.Y` a full one (Latest only on the
 newest stable line). A manual dispatch on that tag re-runs the publish; a dispatch on
 `main`, and a push to `release/X.Y`, only verify. There is no publish on merge. It is link 2 of 4 in the publish chain
-`hugmesh-build-config` 0.6.0-beta.1 → `hugmesh-parent` 2.9.0-beta.1 →
-`hugmesh-commons` 2.2.0-beta.1 → `hugmesh-auth-core` 2.6.0-beta.1; see `RELEASING.md`.
+`hugmesh-build-config` 0.7.0-beta.1 → `hugmesh-parent` 2.10.0-beta.1 →
+`hugmesh-commons` 2.3.0-beta.1 → `hugmesh-auth-core` 2.7.0-beta.1; see `RELEASING.md`.
 
 For local development, `./mvnw install` writes the POM to `~/.m2`, so sibling repos on
 the same machine resolve it offline.
 
 ## Current State
 
-- The metapom is **2.9.0-beta.1** on the Boot-4 baseline: Spring Boot 4.0.7,
-  Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.2.0-beta.1. Consumers still pin
-  2.8.0 until their own beta PRs land, so `scripts/check_baseline_drift.py` reports them
-  as drift until then. The merged PRs on
-  `hugmesh/hugmesh-parent` are #1, #3, #5, #6 and #7 (the last old-brand spellings, the
-  CI-only GitHub Packages route, and the `PACKAGES_READ_TOKEN` release docs and
-  preflight). Older PR numbers in the git history belong to the repo's earlier home.
-  Every remote branch that still exists is merged. No feature branch is active.
-- The Release workflow has run once on this repo (2026-10-07, run 37699571478, in its
-  earlier dispatch-only shape). It failed at the preflight step: HTTP 404 reading
-  `hugmesh-build-config` from GitHub Packages, with `PACKAGES_READ_TOKEN` unset. Nothing
-  has been published through it.
+- The metapom is **2.10.0-beta.1** on the Boot-4 baseline: Spring Boot 4.0.7,
+  Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.3.0-beta.1, `hugmesh-auth-core`
+  2.7.0-beta.1 (managed only). Measured 2026-11-19: every Maven consumer in the org
+  (the twelve BFF/API/library repos) declares `hugmesh-parent` 2.10.0-beta.1. The merged
+  PRs on `hugmesh/hugmesh-parent` are #1, #3, #5 to #8 and #12 to #17. Older PR numbers in
+  the git history belong to the repo's earlier home.
+- The Release workflow published `v2.9.0-beta.1` (2026-10-29) and `v2.10.0-beta.1`
+  (2026-11-13) to GitHub Packages. Its first runs (2026-10-07 and 2026-10-26) failed
+  before anything was published.
 - This metapom carries **no application or auth code**. It pins versions, shared
   starters, plugins and publishing config. The org's shared security and tenancy code
-  lives in `hugmesh-commons` (`net.hugmesh.commons.*`; its beta is 2.2.0-beta.1,
+  lives in `hugmesh-commons` (`net.hugmesh.commons.*`; its beta is 2.3.0-beta.1,
   the version this metapom pins in `dependencyManagement`). The shared
   account/session/MFA/Casdoor-admin infrastructure lives in `hugmesh-auth-core` (beta
-  2.6.0-beta.1; depends on commons and on this parent; consumed by `user-bff` and
+  2.7.0-beta.1, managed here; depends on commons and on this parent; consumed by `user-bff` and
   `admin-bff`). Both are downstream of this baseline (they parent off it), not part of
   it. Do not mistake their artifact versions for the parent version they depend on.
 - Ecosystem auth model (context only; the consumer repos enforce it, not this one):

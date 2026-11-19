@@ -3,14 +3,14 @@
 `net.hugmesh:hugmesh-parent` is **link 2 of 4** in the org's Maven publish chain:
 
 ```
-hugmesh-build-config 0.6.0-beta.1  ->  hugmesh-parent 2.9.0-beta.1  ->  hugmesh-commons 2.2.0-beta.1  ->  hugmesh-auth-core 2.6.0-beta.1
+hugmesh-build-config 0.7.0-beta.1  ->  hugmesh-parent 2.10.0-beta.1  ->  hugmesh-commons 2.3.0-beta.1  ->  hugmesh-auth-core 2.7.0-beta.1
 ```
 
 ## How a version is published (beta scheme, 2026-10-21)
 
-The version is **`2.9.0-beta.1`**: the org beta scheme (`MAJOR.MINOR.PATCH-beta.N`). 2.8.0 was
-pinned by every BFF, so the beta goes on the next minor line. N starts at 1 and goes up by
-one for each further beta of 2.9.0. Never a SNAPSHOT, never `+build` metadata.
+The current version is **`2.10.0-beta.1`**, in the org beta scheme (`MAJOR.MINOR.PATCH-beta.N`). The
+first beta was 2.9.0-beta.1: 2.8.0 was pinned by every BFF, so the beta went on the next minor line. N starts at 1 and goes up by
+one for each further beta of the same MAJOR.MINOR.PATCH. Never a SNAPSHOT, never `+build` metadata.
 
 `.github/workflows/release.yml` publishes **only when a person pushes a tag** `v<version>`
 that equals `<version>` in `pom.xml`: a beta `vX.Y.Z-beta.N` on a commit on `main`, a stable
@@ -29,7 +29,7 @@ immutable, so publish-on-merge would try to redeploy the same version.
 `scripts/test_release_workflow.py` and `scripts/test-release-channel.sh` pin that shape (and
 both run inside the workflow).
 
-**Before the tag:** `hugmesh-build-config` `v0.6.0-beta.1` must already be published. The
+**Before the tag:** `hugmesh-build-config` at the version this pom names (`v0.7.0-beta.1` today) must already be published. The
 analyser plugins load its ruleset jar during `verify`. Measured on 2026-10-21, offline, with
 that jar absent from the local repository:
 
@@ -110,7 +110,7 @@ mechanism, the publish path is made real but unfired.
 
 Its own `<parent>` is `org.springframework.boot:spring-boot-starter-parent:4.0.7`, which is
 on Maven Central. The one `net.hugmesh` artifact it needs is
-**`net.hugmesh:hugmesh-build-config:0.6.0-beta.1`**, and it needs it on a **plugin** classpath, not
+**`net.hugmesh:hugmesh-build-config`** (0.7.0-beta.1 today), and it needs it on a **plugin** classpath, not
 as a project dependency: `pom.xml`'s `maven-pmd-plugin`, `maven-checkstyle-plugin` and
 `spotbugs-maven-plugin` blocks each list it under the plugin's own `<dependencies>` so the
 analyser reads the curated ruleset off its plugin classloader.
