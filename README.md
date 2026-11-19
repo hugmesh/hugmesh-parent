@@ -203,7 +203,8 @@ the same machine resolve it offline.
 
 - The metapom is **2.10.0-beta.1** on the Boot-4 baseline: Spring Boot 4.0.7,
   Spring Cloud 2025.1.2, Java 25, `hugmesh-commons` 2.3.0-beta.1, `hugmesh-auth-core`
-  2.7.0-beta.1 (managed only). Measured 2026-11-19: every Maven consumer in the org
+  2.7.0-beta.1 (managed only; `user-bff` and `admin-bff` take it from here and no
+  longer pin it themselves). Measured 2026-11-19: every Maven consumer in the org
   (the twelve BFF/API/library repos) declares `hugmesh-parent` 2.10.0-beta.1. The merged
   PRs on `hugmesh/hugmesh-parent` are #1, #3, #5 to #8 and #12 to #17. Older PR numbers in
   the git history belong to the repo's earlier home.
@@ -242,12 +243,10 @@ plans, not shipped work:
 - Keep the 2.x line on the same Spring Boot / Spring Cloud train the gateways run,
   and bump shared versions (`hugmesh-commons`, SpringDoc, Resilience4j, Testcontainers,
   AWS SDK) in lockstep across consumers.
-- `hugmesh-auth-core` is now managed here (`hugmesh-auth-core.version`). Still to do:
-  `user-bff` and `admin-bff` drop their explicit `<version>` after moving to a parent
-  release that contains the entry; that needs a new parent version, which is a release
-  decision.
-- Retire the H2 pins when an upstream Boot-4 r2dbc-h2 release fixes the
-  parameter-binding regression.
+- Retire the H2 pins once `user-bff` passes on Boot 4's managed pair (r2dbc-h2 1.1.0 /
+  H2 2.4.240). Measured 2026-11-19: `auth-core` and `admin-bff` already pass on it;
+  `user-bff` does not, because H2 2.4.240 rejects valid rows on its
+  `CHECK (column IN (...))` constraints (hugmesh-parent#11 has the numbers).
 - Publish through GitLab CI (`CI_JOB_TOKEN`) and, once the repos can read each other's
   packages, through the manual GitHub Packages Release workflow.
 

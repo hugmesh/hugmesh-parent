@@ -176,10 +176,11 @@
       </dependency>
 
       <!-- H2 PINS (override Boot 4's managed versions). Boot 4.0.x manages
-           io.r2dbc:r2dbc-h2 1.1.0 / com.h2database:h2 2.4.240, whose combination
-           regressed parameter binding for the H2 @DataR2dbcTest slices. Pinning
-           back to r2dbc-h2 1.0.0.RELEASE / H2 2.3.232 keeps the H2-backed reactive
-           data-slice tests green across all consumers. -->
+           io.r2dbc:r2dbc-h2 1.1.0 / com.h2database:h2 2.4.240. Measured 2026-11-19
+           (hugmesh-parent#11): auth-core and admin-bff pass on that pair, but under
+           H2 2.4.240 user-bff's CHECK (column IN (...)) constraints reject valid rows
+           (66 errors), so r2dbc-h2 1.0.0.RELEASE / H2 2.3.232 stay pinned until
+           user-bff passes on the managed pair. -->
       <dependency>
         <groupId>io.r2dbc</groupId>
         <artifactId>r2dbc-h2</artifactId>
